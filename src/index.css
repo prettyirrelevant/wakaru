@@ -1,0 +1,247 @@
+/* Import JetBrains Mono from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* TUI-inspired design system */
+@layer base {
+  :root {
+    /* Core palette - warm terminal aesthetic */
+    --background: 40 6% 7%;
+    --foreground: 45 20% 90%;
+    
+    /* Muted tones */
+    --muted: 40 4% 12%;
+    --muted-foreground: 40 8% 55%;
+    
+    /* Borders - subtle */
+    --border: 40 6% 18%;
+    --border-strong: 40 6% 25%;
+    
+    /* Accent colors */
+    --accent: 45 100% 60%;
+    --accent-foreground: 40 6% 7%;
+    
+    /* Semantic colors */
+    --success: 142 70% 45%;
+    --success-muted: 142 30% 20%;
+    --destructive: 0 70% 55%;
+    --destructive-muted: 0 30% 20%;
+    --warning: 38 92% 50%;
+    --warning-muted: 38 40% 20%;
+    
+    /* Ring for focus states */
+    --ring: 45 100% 60%;
+  }
+
+  .dark {
+    --background: 40 6% 7%;
+    --foreground: 45 20% 90%;
+    --muted: 40 4% 12%;
+    --muted-foreground: 40 8% 55%;
+    --border: 40 6% 18%;
+    --border-strong: 40 6% 25%;
+    --accent: 45 100% 60%;
+    --accent-foreground: 40 6% 7%;
+    --success: 142 70% 45%;
+    --success-muted: 142 30% 20%;
+    --destructive: 0 70% 55%;
+    --destructive-muted: 0 30% 20%;
+    --warning: 38 92% 50%;
+    --warning-muted: 38 40% 20%;
+    --ring: 45 100% 60%;
+  }
+
+  /* Light mode - inverted but still TUI feel */
+  @media (prefers-color-scheme: light) {
+    :root:not(.dark) {
+      --background: 45 20% 96%;
+      --foreground: 40 6% 10%;
+      --muted: 45 10% 90%;
+      --muted-foreground: 40 6% 45%;
+      --border: 40 6% 82%;
+      --border-strong: 40 6% 70%;
+      --accent: 40 100% 35%;
+      --accent-foreground: 45 20% 96%;
+      --success: 142 70% 35%;
+      --success-muted: 142 40% 90%;
+      --destructive: 0 70% 45%;
+      --destructive-muted: 0 40% 92%;
+      --warning: 38 92% 45%;
+      --warning-muted: 38 50% 90%;
+      --ring: 40 100% 35%;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    letter-spacing: -0.01em;
+  }
+
+  /* Selection style */
+  ::selection {
+    background-color: hsl(var(--accent) / 0.3);
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer components {
+  /* TUI Box styles */
+  .tui-box {
+    @apply border border-border bg-muted/50;
+    box-shadow: inset 0 1px 0 hsl(var(--border-strong) / 0.1);
+  }
+
+  .tui-box-accent {
+    @apply border border-accent/30 bg-accent/5;
+  }
+
+  /* TUI Input */
+  .tui-input {
+    @apply bg-background border border-border px-3 py-2 text-sm;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* TUI Button variants */
+  .tui-btn {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium;
+    @apply border transition-colors duration-100;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .tui-btn-primary {
+    @apply tui-btn bg-accent text-accent-foreground border-accent;
+    @apply hover:bg-accent/90;
+  }
+
+  .tui-btn-secondary {
+    @apply tui-btn bg-muted text-foreground border-border;
+    @apply hover:bg-muted/80 hover:border-border-strong;
+  }
+
+  .tui-btn-ghost {
+    @apply tui-btn bg-transparent text-foreground border-transparent;
+    @apply hover:bg-muted hover:border-border;
+  }
+
+  /* TUI Badge */
+  .tui-badge {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-medium;
+    @apply border border-border bg-muted text-muted-foreground;
+  }
+
+  .tui-badge-success {
+    @apply tui-badge border-success/30 bg-success-muted text-success;
+  }
+
+  .tui-badge-destructive {
+    @apply tui-badge border-destructive/30 bg-destructive-muted text-destructive;
+  }
+
+  .tui-badge-warning {
+    @apply tui-badge border-warning/30 bg-warning-muted text-warning;
+  }
+
+  .tui-badge-accent {
+    @apply tui-badge border-accent/30 bg-accent/10 text-accent;
+  }
+
+  /* TUI Divider */
+  .tui-divider {
+    @apply border-t border-border;
+    border-style: dashed;
+  }
+
+  /* ASCII-style decorators */
+  .tui-bracket::before {
+    content: '[';
+    @apply text-muted-foreground mr-1;
+  }
+
+  .tui-bracket::after {
+    content: ']';
+    @apply text-muted-foreground ml-1;
+  }
+
+  /* Monospace numbers */
+  .mono-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Animate pulse for loading states */
+  .tui-pulse {
+    animation: tui-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes tui-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Cursor blink */
+  .cursor-blink::after {
+    content: '_';
+    animation: blink 1s step-end infinite;
+    @apply text-accent;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+}
