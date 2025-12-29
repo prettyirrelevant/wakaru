@@ -1,6 +1,11 @@
 import * as Comlink from 'comlink';
-import * as XLSX from 'xlsx';
 import { KudaParser } from '~/lib/parsers/kuda';
+import { PalmPayParser } from '~/lib/parsers/palmpay';
+import {
+  extractRowsFromExcel,
+  extractRowsFromCsv,
+  extractRowsFromPdf,
+} from '~/lib/parsers/processors';
 import type { Transaction, RawRow, BankType } from '~/types';
 
 const CHUNK_SIZE = 1000;
@@ -12,34 +17,11 @@ interface ParseResult {
 
 type ProgressCallback = (progress: number, message: string) => void;
 
-// Parser instances
-const kudaParser = new KudaParser();
+const parsers = {
+  kuda: new KudaParser(),
+  palmpay: new PalmPayParser(),
+} as const;
 
-function parseCSVLine(line: string): RawRow {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current.trim());
-
-  return result.map((cell) => {
-    const trimmed = cell.replace(/^"|"$/g, '').trim();
-    return trimmed === '' ? undefined : trimmed;
-  });
-}
-
-// Main parser API
 const parserApi = {
   async parseFile(
     fileBuffer: ArrayBuffer,
@@ -50,34 +32,18 @@ const parserApi = {
     try {
       onProgress(5, 'Reading file...');
 
-      const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-      let rows: RawRow[] = [];
+      let rows = await extractRows(fileBuffer, fileName);
 
-      if (isExcel) {
-        const workbook = XLSX.read(fileBuffer, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        if (!firstSheetName) {
-          return { transactions: [], error: 'No sheets found in Excel file' };
-        }
-        const worksheet = workbook.Sheets[firstSheetName];
-        const rawData: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
-          raw: false,
-          header: 1,
-        });
-        rows = rawData.map((row) =>
-          row.map((cell) =>
-            cell === null || cell === undefined ? undefined : String(cell)
-          ) as RawRow
-        );
-      } else {
-        const text = new TextDecoder().decode(fileBuffer);
-        const lines = text.split(/\r?\n/);
-        rows = lines
-          .filter((line) => line.trim())
-          .map((line) => parseCSVLine(line));
+      if (bankType === 'palmpay') {
+        rows = PalmPayParser.preprocessRows(rows);
       }
 
       onProgress(20, `Found ${rows.length} rows...`);
+
+      const parser = parsers[bankType as keyof typeof parsers];
+      if (!parser) {
+        return { transactions: [], error: `Unsupported bank: ${bankType}` };
+      }
 
       const transactions: Transaction[] = [];
       const totalRows = rows.length;
@@ -87,15 +53,7 @@ const parserApi = {
 
         for (let j = 0; j < chunk.length; j++) {
           const rowIndex = i + j;
-          let transaction: Transaction | null = null;
-
-          switch (bankType) {
-            case 'kuda':
-              transaction = kudaParser.parseTransaction(chunk[j], rowIndex);
-              break;
-            default:
-              break;
-          }
+          const transaction = parser.parseTransaction(chunk[j], rowIndex);
 
           if (transaction) {
             transactions.push(transaction);
@@ -123,6 +81,20 @@ const parserApi = {
     }
   },
 };
+
+async function extractRows(buffer: ArrayBuffer, fileName: string): Promise<RawRow[]> {
+  const ext = fileName.toLowerCase();
+  
+  if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
+    return extractRowsFromExcel(buffer);
+  }
+  
+  if (ext.endsWith('.pdf')) {
+    return extractRowsFromPdf(buffer);
+  }
+  
+  return extractRowsFromCsv(buffer);
+}
 
 Comlink.expose(parserApi);
 

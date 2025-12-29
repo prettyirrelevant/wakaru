@@ -2,6 +2,7 @@ import { BankType, type BankInfo } from '~/types';
 
 export const SUPPORTED_BANKS: BankInfo[] = [
   { id: BankType.Kuda, name: 'Kuda', available: true },
+  { id: BankType.PalmPay, name: 'PalmPay', available: true },
   { id: BankType.OPay, name: 'OPay', available: false },
   { id: BankType.GTB, name: 'GTBank', available: false },
   { id: BankType.Access, name: 'Access Bank', available: false },
@@ -17,9 +18,11 @@ const MIME_TYPES = {
     'application/vnd.ms-excel',
   ] as const,
   CSV: ['text/csv', 'application/csv'] as const,
+  PDF: ['application/pdf'] as const,
 } as const;
 
 export const ACCEPTED_FILE_TYPES = [
   ...MIME_TYPES.EXCEL,
   ...MIME_TYPES.CSV,
+  ...MIME_TYPES.PDF,
 ].join(',');

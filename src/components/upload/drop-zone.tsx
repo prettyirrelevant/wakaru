@@ -103,7 +103,7 @@ export function DropZone({ onFileSelect, disabled }: DropZoneProps) {
               )}
             </p>
             <p className="text-xs text-muted-foreground/70">
-              .xlsx · .csv
+              .xlsx · .csv · .pdf
             </p>
           </div>
 

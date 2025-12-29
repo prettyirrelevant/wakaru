@@ -26,4 +26,7 @@ export default defineConfig({
   define: {
     __GIT_SHA__: JSON.stringify(gitSha),
   },
+  worker: {
+    format: 'es',
+  },
 });
