@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink';
 import { KudaParser } from '~/lib/parsers/kuda';
+import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
 import { WemaBankParser } from '~/lib/parsers/wema';
 import {
@@ -20,6 +21,7 @@ type ProgressCallback = (progress: number, message: string) => void;
 
 const parsers = {
   kuda: new KudaParser(),
+  opay: new OPayParser(),
   palmpay: new PalmPayParser(),
   wemabank: new WemaBankParser(),
 } as const;
@@ -95,6 +97,10 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   if (bankType === 'palmpay') {
     const text = await extractTextFromPdf(buffer);
     return PalmPayParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'opay') {
+    return extractRowsFromExcel(buffer, 'Wallet Account Transactions');
   }
   
   if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {

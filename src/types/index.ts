@@ -67,10 +67,13 @@ export enum TransactionCategory {
   Outflow = 'outflow',
 }
 
+export type FileFormat = 'pdf' | 'excel' | 'csv';
+
 export interface BankInfo {
   id: BankType;
   name: string;
   available: boolean;
+  fileFormat?: FileFormat;
 }
 
 export interface ProcessingStats {

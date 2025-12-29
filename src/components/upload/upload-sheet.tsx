@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import * as Comlink from 'comlink';
 import { BottomSheet, Progress } from '~/components/ui';
 import { useTransactionStore } from '~/stores/transactions';
 import { DropZone } from './drop-zone';
 import { BankPicker } from './bank-picker';
+import { SUPPORTED_BANKS } from '~/lib/constants';
 import type { BankType, Transaction } from '~/types';
 
 interface ParserApi {
@@ -99,6 +100,11 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
   );
 
   const isProcessing = uploadStatus.stage === 'parsing';
+  
+  const selectedBankInfo = useMemo(
+    () => SUPPORTED_BANKS.find((b) => b.id === selectedBank),
+    [selectedBank]
+  );
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
@@ -142,6 +148,7 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
         <DropZone
           onFileSelect={handleFileSelect}
           disabled={isProcessing || !selectedBank}
+          fileFormat={selectedBankInfo?.fileFormat}
         />
 
         {!selectedBank && (

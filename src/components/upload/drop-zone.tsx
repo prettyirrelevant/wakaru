@@ -1,13 +1,21 @@
 import { useCallback, useState, type DragEvent, type ChangeEvent } from 'react';
 import { cn } from '~/lib/utils';
 import { ACCEPTED_FILE_TYPES } from '~/lib/constants';
+import type { FileFormat } from '~/types';
 
 interface DropZoneProps {
   onFileSelect: (file: File) => void;
   disabled?: boolean;
+  fileFormat?: FileFormat;
 }
 
-export function DropZone({ onFileSelect, disabled }: DropZoneProps) {
+const FORMAT_LABELS: Record<FileFormat, string> = {
+  pdf: '.pdf',
+  excel: '.xlsx',
+  csv: '.csv',
+};
+
+export function DropZone({ onFileSelect, disabled, fileFormat }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -103,7 +111,7 @@ export function DropZone({ onFileSelect, disabled }: DropZoneProps) {
               )}
             </p>
             <p className="text-xs text-muted-foreground/70">
-              .xlsx · .csv · .pdf
+              {fileFormat ? FORMAT_LABELS[fileFormat] : '.xlsx · .csv · .pdf'}
             </p>
           </div>
 

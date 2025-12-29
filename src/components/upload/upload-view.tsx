@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import * as Comlink from 'comlink';
 import { useTransactionStore } from '~/stores/transactions';
 import { DropZone } from './drop-zone';
 import { BankPicker } from './bank-picker';
 import { Progress } from '~/components/ui';
 import { SettingsSheet } from '~/components/settings/settings-sheet';
+import { SUPPORTED_BANKS } from '~/lib/constants';
 import type { BankType, Transaction } from '~/types';
 
 interface ParserApi {
@@ -75,6 +76,11 @@ export function UploadView() {
   );
 
   const isProcessing = status.stage === 'parsing';
+  
+  const selectedBankInfo = useMemo(
+    () => SUPPORTED_BANKS.find((b) => b.id === selectedBank),
+    [selectedBank]
+  );
 
   return (
     <div className="flex min-h-screen flex-col px-4 py-6">
@@ -126,6 +132,7 @@ export function UploadView() {
         <DropZone
           onFileSelect={handleFileSelect}
           disabled={isProcessing || !selectedBank}
+          fileFormat={selectedBankInfo?.fileFormat}
         />
 
         <BankPicker selectedBank={selectedBank} onSelectBank={setSelectedBank} />
