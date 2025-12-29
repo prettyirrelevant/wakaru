@@ -1,28 +1,42 @@
-## Usage
+# wakaru
+
+understand your spending. privately.
+
+wakaru is a bank statement analyzer that runs entirely in your browser. upload your statement, see where your money goes, ask questions about your spending — all without your data ever leaving your device.
+
+## why
+
+most finance apps want your bank login or upload your data to their servers. wakaru doesn't. your transactions stay on your device, processed locally, stored locally. the only thing that leaves is your question when you use the chat feature — and even then, we send the question, not your data.
+
+## features
+
+- **local parsing** — drop your bank statement, get instant insights
+- **visual analytics** — see inflows, outflows, and trends at a glance  
+- **ai chat** — ask questions like "how much did i spend on food in december?"
+- **export** — take your parsed data anywhere
+
+## supported banks
+
+- kuda (more coming soon)
+
+## tech
+
+- react + typescript
+- sql.js for in-browser queries
+- dexie for local storage
+- tailwind with a terminal-inspired ui
+
+## development
 
 ```bash
-$ npm install # or pnpm install or yarn install
+pnpm install
+pnpm dev
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+## privacy
 
-## Available Scripts
+your data never leaves your browser. when you ask the ai a question, we generate a sql query from your question, run it locally against your data, then send only the question and query results to get a natural language response. your raw transactions are never transmitted.
 
-In the project directory, you can run:
+## license
 
-### `npm run dev`
-
-Runs the app in the development mode.<br>
-Open [http://localhost:5173](http://localhost:5173) to view it in the browser.
-
-### `npm run build`
-
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
-
-## Deployment
-
-Learn more about deploying your application with the [documentations](https://vite.dev/guide/static-deploy.html)
+mit
