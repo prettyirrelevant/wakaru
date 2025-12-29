@@ -15,6 +15,33 @@ const TX_ID_PATTERN = /^[a-z0-9_]+$/i;
 export class PalmPayParser implements BankParser {
   readonly bankName = 'PalmPay';
 
+  static extractRowsFromPdfText(text: string): RawRow[] {
+    const rows: RawRow[] = [];
+    const datePattern = /(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}\s+(?:AM|PM))/gi;
+    const chunks = text.split(datePattern).filter(Boolean);
+    
+    for (let i = 1; i < chunks.length - 1; i += 2) {
+      const dateTime = chunks[i].trim();
+      const rest = chunks[i + 1]?.trim() || '';
+      
+      if (!dateTime || !rest) continue;
+      if (rest.includes('Transaction Date') || rest.includes('Transaction Detail')) continue;
+      
+      const amountMatch = rest.match(/([+-]\d+(?:,\d{3})*\.\d{2})/);
+      
+      if (amountMatch) {
+        const amount = amountMatch[1];
+        const amountIndex = rest.indexOf(amount);
+        const description = rest.slice(0, amountIndex).trim();
+        const transactionId = rest.slice(amountIndex + amount.length).trim();
+        
+        rows.push([`${dateTime} ${description}`, amount, transactionId]);
+      }
+    }
+    
+    return rows;
+  }
+
   static preprocessRows(rows: RawRow[]): RawRow[] {
     const result: RawRow[] = [];
     let pendingForwardContinuations: string[] = [];

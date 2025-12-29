@@ -52,6 +52,7 @@ export enum TransactionType {
 export enum BankType {
   Kuda = 'kuda',
   PalmPay = 'palmpay',
+  WemaBank = 'wemabank',
   OPay = 'opay',
   GTB = 'gtb',
   Access = 'access',

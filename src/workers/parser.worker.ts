@@ -1,10 +1,11 @@
 import * as Comlink from 'comlink';
 import { KudaParser } from '~/lib/parsers/kuda';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
+import { WemaBankParser } from '~/lib/parsers/wema';
 import {
   extractRowsFromExcel,
   extractRowsFromCsv,
-  extractRowsFromPdf,
+  extractTextFromPdf,
 } from '~/lib/parsers/processors';
 import type { Transaction, RawRow, BankType } from '~/types';
 
@@ -20,6 +21,7 @@ type ProgressCallback = (progress: number, message: string) => void;
 const parsers = {
   kuda: new KudaParser(),
   palmpay: new PalmPayParser(),
+  wemabank: new WemaBankParser(),
 } as const;
 
 const parserApi = {
@@ -32,9 +34,9 @@ const parserApi = {
     try {
       onProgress(5, 'Reading file...');
 
-      let rows = await extractRows(fileBuffer, fileName);
+      let rows = await extractRows(fileBuffer, fileName, bankType);
 
-      if (bankType === 'palmpay') {
+      if (bankType === 'palmpay' && !fileName.toLowerCase().endsWith('.pdf')) {
         rows = PalmPayParser.preprocessRows(rows);
       }
 
@@ -82,15 +84,21 @@ const parserApi = {
   },
 };
 
-async function extractRows(buffer: ArrayBuffer, fileName: string): Promise<RawRow[]> {
+async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: BankType): Promise<RawRow[]> {
   const ext = fileName.toLowerCase();
+  
+  if (bankType === 'wemabank') {
+    const text = await extractTextFromPdf(buffer);
+    return WemaBankParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'palmpay') {
+    const text = await extractTextFromPdf(buffer);
+    return PalmPayParser.extractRowsFromPdfText(text);
+  }
   
   if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
     return extractRowsFromExcel(buffer);
-  }
-  
-  if (ext.endsWith('.pdf')) {
-    return extractRowsFromPdf(buffer);
   }
   
   return extractRowsFromCsv(buffer);

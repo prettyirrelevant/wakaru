@@ -3,6 +3,7 @@ import { BankType, type BankInfo } from '~/types';
 export const SUPPORTED_BANKS: BankInfo[] = [
   { id: BankType.Kuda, name: 'Kuda', available: true },
   { id: BankType.PalmPay, name: 'PalmPay', available: true },
+  { id: BankType.WemaBank, name: 'Wema Bank', available: true },
   { id: BankType.OPay, name: 'OPay', available: false },
   { id: BankType.GTB, name: 'GTBank', available: false },
   { id: BankType.Access, name: 'Access Bank', available: false },
