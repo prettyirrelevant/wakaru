@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { BottomSheet, Progress } from '~/components/ui';
-import { useSettingsStore, type AIProvider } from '~/stores/settings';
+import { BottomSheet, Switch } from '~/components/ui';
+import { useSettingsStore } from '~/stores/settings';
 import { useTransactionStore } from '~/stores/transactions';
-import { useLLMStore } from '~/stores/llm';
 import { ExportImport } from './export-import';
 import type { Theme } from '~/types';
 
@@ -16,13 +15,10 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
-  const aiProvider = useSettingsStore((s) => s.aiProvider);
-  const setAIProvider = useSettingsStore((s) => s.setAIProvider);
+  const chatEnabled = useSettingsStore((s) => s.chatEnabled);
+  const setChatEnabled = useSettingsStore((s) => s.setChatEnabled);
 
   const clearAll = useTransactionStore((s) => s.clearAll);
-
-  const localLLMStatus = useLLMStore((s) => s.localStatus);
-  const initLocalLLM = useLLMStore((s) => s.initLocal);
 
   const handleClearData = async () => {
     await clearAll();
@@ -30,35 +26,11 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     onClose();
   };
 
-  const handleSelectProvider = async (provider: AIProvider) => {
-    setAIProvider(provider);
-    
-    if (provider === 'local' && localLLMStatus.stage === 'idle') {
-      initLocalLLM();
-    }
-  };
-
   const themeOptions: { value: Theme; label: string }[] = [
     { value: 'system', label: 'auto' },
     { value: 'light', label: 'light' },
     { value: 'dark', label: 'dark' },
   ];
-
-  const isLocalLoading = localLLMStatus.stage === 'loading';
-
-  const getProviderStatus = (provider: AIProvider) => {
-    if (provider === 'cloud') {
-      return aiProvider === 'cloud' ? 'ready' : null;
-    }
-    if (provider === 'local') {
-      if (aiProvider !== 'local') return null;
-      if (localLLMStatus.stage === 'ready') return 'ready';
-      if (localLLMStatus.stage === 'loading') return 'loading...';
-      if (localLLMStatus.stage === 'error') return 'error';
-      return null;
-    }
-    return null;
-  };
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
@@ -94,79 +66,21 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
         {/* AI Chat */}
         <section>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-            <span>ai chat</span>
-          </div>
-          
-          <div className="space-y-2">
-            <button
-              onClick={() => handleSelectProvider('cloud')}
-              className={`w-full text-left text-xs px-3 py-2 border ${
-                aiProvider === 'cloud'
-                  ? 'bg-accent/10 border-accent text-foreground'
-                  : 'bg-muted border-border hover:border-border-strong'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span>{aiProvider === 'cloud' ? '>' : ' '} cloud</span>
-                {getProviderStatus('cloud') && (
-                  <span className="tui-badge-success">{getProviderStatus('cloud')}</span>
-                )}
-              </div>
-              <div className="text-muted-foreground/70 mt-0.5 pl-2">
-                instant responses, requires internet
-              </div>
-            </button>
-
-            <button
-              onClick={() => handleSelectProvider('local')}
-              className={`w-full text-left text-xs px-3 py-2 border ${
-                aiProvider === 'local'
-                  ? 'bg-accent/10 border-accent text-foreground'
-                  : 'bg-muted border-border hover:border-border-strong'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span>{aiProvider === 'local' ? '>' : ' '} local</span>
-                {getProviderStatus('local') && (
-                  <span className={
-                    localLLMStatus.stage === 'error' 
-                      ? 'tui-badge-error' 
-                      : localLLMStatus.stage === 'ready'
-                        ? 'tui-badge-success'
-                        : 'tui-badge'
-                  }>
-                    {getProviderStatus('local')}
-                  </span>
-                )}
-              </div>
-              <div className="text-muted-foreground/70 mt-0.5 pl-2">
-                works offline, ~270mb one-time download
-              </div>
-            </button>
-          </div>
-
-          {aiProvider === 'local' && isLocalLoading && (
-            <div className="mt-3 tui-box p-3">
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span>{localLLMStatus.message || 'Loading model...'}</span>
-                <span>{localLLMStatus.progress ?? 0}%</span>
-              </div>
-              <Progress value={localLLMStatus.progress ?? 0} />
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs">
+              <span className="text-muted-foreground">ai chat</span>
+              <span className="text-muted-foreground/50 mx-1">—</span>
+              <span className="text-muted-foreground/70">ask questions about your spending</span>
             </div>
-          )}
-
-          {aiProvider === 'local' && localLLMStatus.stage === 'error' && (
-            <div className="mt-3 text-xs text-destructive">
-              error: {localLLMStatus.error}
-            </div>
-          )}
-
-          {aiProvider === 'none' && (
-            <p className="mt-3 text-xs text-muted-foreground/70">
-              select a provider to enable ai chat
-            </p>
-          )}
+            <Switch
+              checked={chatEnabled}
+              onCheckedChange={setChatEnabled}
+              aria-label="Enable AI chat"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground/50">
+            &gt; your data stays on your device. we send your question to ai, get an answer, and keep nothing.
+          </p>
         </section>
 
         <div className="tui-divider my-4" />
@@ -213,11 +127,17 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         <div className="tui-divider my-4" />
 
         <section>
-          <div className="text-xs text-muted-foreground/70 space-y-1">
-            <p>wakaru - understand your spending</p>
-            <p>all data stays on your device</p>
-            <p className="mt-2 text-muted-foreground/50">v0.0.1</p>
-          </div>
+          <p className="text-xs text-muted-foreground/50">
+            wakaru · your data stays here ·{' '}
+            <a
+              href={`https://github.com/prettyirrelevant/wakaru/commit/${__GIT_SHA__}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-muted-foreground"
+            >
+              {__GIT_SHA__}
+            </a>
+          </p>
         </section>
       </div>
     </BottomSheet>

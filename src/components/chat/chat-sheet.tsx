@@ -21,18 +21,11 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const transactions = useTransactionStore((s) => s.transactions);
-  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const chatEnabled = useSettingsStore((s) => s.chatEnabled);
   
-  const localLLMStatus = useLLMStore((s) => s.localStatus);
-  const generateLocalSQL = useLLMStore((s) => s.generateLocalSQL);
-  const generateLocalAnswer = useLLMStore((s) => s.generateLocalAnswer);
-  const generateCloudSQL = useLLMStore((s) => s.generateCloudSQL);
-  const generateCloudAnswer = useLLMStore((s) => s.generateCloudAnswer);
+  const generateSQL = useLLMStore((s) => s.generateSQL);
+  const generateAnswer = useLLMStore((s) => s.generateAnswer);
 
-  const isLocalReady = localLLMStatus.stage === 'ready';
-  const isAIReady = (aiProvider === 'local' && isLocalReady) || aiProvider === 'cloud';
-
-  // Load transactions into SQLite when they change
   useEffect(() => {
     if (transactions.length > 0) {
       loadTransactions(transactions)
@@ -41,25 +34,15 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     }
   }, [transactions]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Focus input when sheet opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isOpen]);
-
-  const getChatLevel = () => {
-    if (aiProvider === 'none') return 'off';
-    if (aiProvider === 'cloud') return 'cloud';
-    if (aiProvider === 'local' && isLocalReady) return 'local';
-    if (aiProvider === 'local' && localLLMStatus.stage === 'loading') return 'loading...';
-    return 'off';
-  };
 
   const formatValue = (col: string, value: unknown): string => {
     if (value === null || value === undefined) return 'none';
@@ -96,22 +79,12 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   };
 
   const processQuestion = useCallback(async (question: string): Promise<string> => {
-    // Step 1: Generate SQL from question
-    const sql = aiProvider === 'cloud' 
-      ? await generateCloudSQL(question)
-      : await generateLocalSQL(question);
-    
-    // Step 2: Execute SQL locally
+    const sql = await generateSQL(question);
     const { columns, rows } = await executeQuery(sql);
-    
-    // Step 3: Format results and get natural language answer
     const resultsText = formatResults(columns, rows);
-    const answer = aiProvider === 'cloud'
-      ? await generateCloudAnswer(question, resultsText)
-      : await generateLocalAnswer(question, resultsText);
-    
+    const answer = await generateAnswer(question, resultsText);
     return answer;
-  }, [aiProvider, generateCloudSQL, generateLocalSQL, generateCloudAnswer, generateLocalAnswer]);
+  }, [generateSQL, generateAnswer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,8 +107,8 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
         throw new Error('Still loading your transactions...');
       }
       
-      if (!isAIReady) {
-        throw new Error('Please select an AI provider in settings first.');
+      if (!chatEnabled) {
+        throw new Error('Enable chat in settings first.');
       }
 
       const response = await processQuestion(question);
@@ -185,34 +158,20 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
             <h2 className="text-sm font-semibold">ask</h2>
           </div>
           <div className="flex items-center gap-2">
-            <span className="tui-badge text-xs">{getChatLevel()}</span>
+            <span className={`tui-badge text-xs ${chatEnabled ? 'tui-badge-success' : ''}`}>
+              {chatEnabled ? 'on' : 'off'}
+            </span>
           </div>
         </div>
-
-        {/* Local LLM Loading Progress */}
-        {aiProvider === 'local' && localLLMStatus.stage === 'loading' && (
-          <div className="px-4 py-2 border-b border-border">
-            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>{localLLMStatus.message || 'Loading AI model...'}</span>
-              <span>{localLLMStatus.progress ?? 0}%</span>
-            </div>
-            <div className="h-1 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-accent transition-all duration-300"
-                style={{ width: `${localLLMStatus.progress ?? 0}%` }}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Messages */}
         <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             <div className="space-y-4">
-              {aiProvider === 'none' && (
+              {!chatEnabled && (
                 <div className="tui-box p-3 space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    &gt; ai chat is not enabled
+                    &gt; chat is disabled
                   </p>
                   <p className="text-xs text-muted-foreground/70">
                     go to{' '}
@@ -222,12 +181,12 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                     >
                       [settings]
                     </button>
-                    {' '}to pick a provider
+                    {' '}to enable it
                   </p>
                 </div>
               )}
 
-              {isAIReady && (
+              {chatEnabled && (
                 <div className="flex flex-wrap gap-1.5 justify-center">
                   {suggestedQuestions.map((q) => (
                     <button
@@ -250,7 +209,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
             <div className="flex justify-start">
               <div className="tui-box px-3 py-2">
                 <span className="text-xs text-muted-foreground tui-pulse">
-                  {aiProvider === 'cloud' ? 'asking cloud...' : 'thinking...'}
+                  thinking...
                 </span>
               </div>
             </div>

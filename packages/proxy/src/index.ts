@@ -21,6 +21,7 @@ app.use('*', cors({
     if (!origin) return null;
     if (ALLOWED_ORIGINS.includes(origin)) return origin;
     if (origin.endsWith('.pages.dev')) return origin;
+    if (origin.endsWith('.vercel.app')) return origin;
     return null;
   },
   allowMethods: ['POST', 'OPTIONS'],

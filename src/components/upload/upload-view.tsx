@@ -140,7 +140,15 @@ export function UploadView() {
       {/* Footer */}
       <footer className="mt-auto pt-8 text-center">
         <p className="text-xs text-muted-foreground/50">
-          v0.0.1 · your data stays here
+          <a
+            href={`https://github.com/prettyirrelevant/wakaru/commit/${__GIT_SHA__}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-muted-foreground"
+          >
+            {__GIT_SHA__}
+          </a>
+          {' · your data stays here'}
         </p>
       </footer>
 

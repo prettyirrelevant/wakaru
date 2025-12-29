@@ -43,7 +43,7 @@ async function init(): Promise<void> {
   db.run(SCHEMA);
 }
 
-export async function initDatabase(): Promise<void> {
+async function initDatabase(): Promise<void> {
   if (!initPromise) {
     initPromise = init();
   }

@@ -71,18 +71,6 @@ export interface BankInfo {
   available: boolean;
 }
 
-export interface ProcessingProgress {
-  processed: number;
-  total?: number;
-  message: string;
-}
-
-export interface ProcessingResult {
-  transactions: Transaction[];
-  stats: ProcessingStats;
-  errors: ParseError[];
-}
-
 export interface ProcessingStats {
   totalRows: number;
   successfulTransactions: number;
@@ -102,25 +90,7 @@ export interface BankParser {
   parseTransaction(row: RawRow, rowIndex: number): Transaction | null;
 }
 
-export interface FileReader {
-  supportedTypes: readonly string[];
-  read(file: File): AsyncGenerator<RawRow[]>;
-}
-
 export type Theme = 'light' | 'dark' | 'system';
-
-export type DeviceTier = 'basic' | 'standard' | 'powerful';
-
-export interface DeviceCapability {
-  tier: DeviceTier;
-  hasWebGPU: boolean;
-  memory: number;
-  cores: number;
-  lastChecked: number;
-  fingerprint: string;
-}
-
-export type ChatLevel = 'basic' | 'semantic' | 'ai';
 
 export interface ChatMessage {
   id: string;

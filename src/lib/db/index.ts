@@ -20,7 +20,7 @@ class WakaruDB extends Dexie {
   }
 }
 
-export const db = new WakaruDB();
+const db = new WakaruDB();
 
 export async function getAllTransactions(): Promise<Transaction[]> {
   return db.transactions.toArray();
@@ -43,7 +43,4 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
   await db.settings.put({ key, value });
 }
 
-export async function clearAllData(): Promise<void> {
-  await db.transactions.clear();
-  await db.settings.clear();
-}
+

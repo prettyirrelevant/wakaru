@@ -81,24 +81,24 @@ export const BottomSheet = forwardRef<HTMLDivElement, BottomSheetProps>(
               dragControls={dragControls}
               dragConstraints={{ top: 0 }}
               dragElastic={{ top: 0, bottom: 0.3 }}
+              dragListener={false}
               onDragEnd={(_, info) => {
                 if (info.offset.y > 80 || info.velocity.y > 400) {
                   onClose();
                 }
               }}
               className={cn(
-                'fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col rounded-t-2xl bg-background touch-none',
+                'fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col rounded-t-2xl bg-background',
                 className
               )}
               style={{ 
-                // Prevent overscroll behavior on the sheet itself
                 overscrollBehavior: 'contain',
               }}
             >
               {/* Drag handle */}
               <div
                 onPointerDown={(e) => dragControls.start(e)}
-                className="flex items-center justify-center py-3 cursor-grab active:cursor-grabbing"
+                className="flex items-center justify-center py-3 cursor-grab active:cursor-grabbing touch-none"
               >
                 <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
               </div>
