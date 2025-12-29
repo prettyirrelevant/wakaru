@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { BottomSheet, Progress } from '~/components/ui';
 import { useSettingsStore, type AIProvider } from '~/stores/settings';
 import { useTransactionStore } from '~/stores/transactions';
-import { useEmbeddingStore } from '~/stores/embeddings';
 import { useLLMStore } from '~/stores/llm';
 import { ExportImport } from './export-import';
 import type { Theme } from '~/types';
@@ -21,20 +20,12 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const setAIProvider = useSettingsStore((s) => s.setAIProvider);
 
   const clearAll = useTransactionStore((s) => s.clearAll);
-  const transactions = useTransactionStore((s) => s.transactions);
 
-  // Embedding state
-  const embeddingStatus = useEmbeddingStore((s) => s.status);
-  const embedTransactions = useEmbeddingStore((s) => s.embedTransactions);
-  const clearEmbeddings = useEmbeddingStore((s) => s.clearAll);
-
-  // Local LLM state
   const localLLMStatus = useLLMStore((s) => s.localStatus);
   const initLocalLLM = useLLMStore((s) => s.initLocal);
 
   const handleClearData = async () => {
     await clearAll();
-    await clearEmbeddings();
     setShowClearConfirm(false);
     onClose();
   };
@@ -42,14 +33,8 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const handleSelectProvider = async (provider: AIProvider) => {
     setAIProvider(provider);
     
-    // If selecting local, start loading the model
     if (provider === 'local' && localLLMStatus.stage === 'idle') {
       initLocalLLM();
-    }
-    
-    // Also enable semantic search for better queries
-    if (transactions.length > 0 && embeddingStatus.stage === 'idle') {
-      embedTransactions(transactions);
     }
   };
 
@@ -59,15 +44,8 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     { value: 'dark', label: 'dark' },
   ];
 
-  // Check if embedding is loading
-  const isEmbeddingLoading = 
-    embeddingStatus.stage === 'loading_model' || 
-    embeddingStatus.stage === 'embedding';
-
-  // Check if local LLM is loading
   const isLocalLoading = localLLMStatus.stage === 'loading';
 
-  // Get status text for each provider
   const getProviderStatus = (provider: AIProvider) => {
     if (provider === 'cloud') {
       return aiProvider === 'cloud' ? 'ready' : null;
@@ -85,7 +63,6 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
       <div className="max-h-[85vh] overflow-y-auto px-4 pb-8">
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6">
           <span className="text-accent">$</span>
           <h2 className="text-sm font-semibold">config</h2>
@@ -122,7 +99,6 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           </div>
           
           <div className="space-y-2">
-            {/* Cloud option */}
             <button
               onClick={() => handleSelectProvider('cloud')}
               className={`w-full text-left text-xs px-3 py-2 border ${
@@ -142,7 +118,6 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               </div>
             </button>
 
-            {/* Local option */}
             <button
               onClick={() => handleSelectProvider('local')}
               className={`w-full text-left text-xs px-3 py-2 border ${
@@ -166,12 +141,11 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
                 )}
               </div>
               <div className="text-muted-foreground/70 mt-0.5 pl-2">
-                works offline, ~135mb one-time download
+                works offline, ~270mb one-time download
               </div>
             </button>
           </div>
 
-          {/* Local LLM loading progress */}
           {aiProvider === 'local' && isLocalLoading && (
             <div className="mt-3 tui-box p-3">
               <div className="flex items-center justify-between text-xs mb-2">
@@ -182,29 +156,12 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             </div>
           )}
 
-          {/* Embedding progress */}
-          {isEmbeddingLoading && (
-            <div className="mt-3 tui-box p-3">
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span>
-                  {embeddingStatus.stage === 'loading_model' 
-                    ? 'Loading search...' 
-                    : 'Indexing transactions...'}
-                </span>
-                <span>{embeddingStatus.progress ?? 0}%</span>
-              </div>
-              <Progress value={embeddingStatus.progress ?? 0} />
-            </div>
-          )}
-
-          {/* Local LLM error */}
           {aiProvider === 'local' && localLLMStatus.stage === 'error' && (
             <div className="mt-3 text-xs text-destructive">
               error: {localLLMStatus.error}
             </div>
           )}
 
-          {/* Help text */}
           {aiProvider === 'none' && (
             <p className="mt-3 text-xs text-muted-foreground/70">
               select a provider to enable ai chat
@@ -255,7 +212,6 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
         <div className="tui-divider my-4" />
 
-        {/* About */}
         <section>
           <div className="text-xs text-muted-foreground/70 space-y-1">
             <p>wakaru - understand your spending</p>

@@ -2,9 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { BottomSheet } from '~/components/ui';
 import { useTransactionStore } from '~/stores/transactions';
 import { useSettingsStore } from '~/stores/settings';
-import { useEmbeddingStore } from '~/stores/embeddings';
 import { useLLMStore } from '~/stores/llm';
-import { executeQuery, parseQueryFromLLM } from '~/lib/chat/dsl';
+import { loadTransactions, executeQuery } from '~/lib/db/sqlite';
 import type { ChatMessage } from '~/types';
 
 interface ChatSheetProps {
@@ -17,35 +16,30 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const transactions = useTransactionStore((s) => s.transactions);
   const aiProvider = useSettingsStore((s) => s.aiProvider);
-
-  // Embedding store for semantic search
-  const embeddingStatus = useEmbeddingStore((s) => s.status);
-  const searchEmbeddings = useEmbeddingStore((s) => s.search);
-
-  // LLM store
+  
   const localLLMStatus = useLLMStore((s) => s.localStatus);
-  const generateQueryLocal = useLLMStore((s) => s.generateQueryLocal);
-  const generateQueryCloud = useLLMStore((s) => s.generateQueryCloud);
+  const generateLocalSQL = useLLMStore((s) => s.generateLocalSQL);
+  const generateLocalAnswer = useLLMStore((s) => s.generateLocalAnswer);
+  const generateCloudSQL = useLLMStore((s) => s.generateCloudSQL);
+  const generateCloudAnswer = useLLMStore((s) => s.generateCloudAnswer);
 
-  // Determine chat level and readiness
-  const isSemanticReady = embeddingStatus.stage === 'ready';
   const isLocalReady = localLLMStatus.stage === 'ready';
-  const isCloudReady = aiProvider === 'cloud'; // Cloud is always ready
-  const isAIReady = (aiProvider === 'local' && isLocalReady) || isCloudReady;
+  const isAIReady = (aiProvider === 'local' && isLocalReady) || aiProvider === 'cloud';
 
-  // Chat level display
-  const getChatLevel = () => {
-    if (aiProvider === 'none') return 'basic';
-    if (aiProvider === 'cloud') return 'cloud';
-    if (aiProvider === 'local' && isLocalReady) return 'local';
-    if (aiProvider === 'local' && localLLMStatus.stage === 'loading') return 'loading...';
-    return 'basic';
-  };
+  // Load transactions into SQLite when they change
+  useEffect(() => {
+    if (transactions.length > 0) {
+      loadTransactions(transactions)
+        .then(() => setDbReady(true))
+        .catch((err) => console.error('Failed to load transactions into DB:', err));
+    }
+  }, [transactions]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -59,69 +53,65 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     }
   }, [isOpen]);
 
-  // Generate query using selected provider
-  const generateQuery = useCallback(async (question: string): Promise<string> => {
-    if (aiProvider === 'cloud') {
-      return generateQueryCloud(question);
-    } else if (aiProvider === 'local' && isLocalReady) {
-      return generateQueryLocal(question);
-    }
-    throw new Error('AI not available');
-  }, [aiProvider, isLocalReady, generateQueryCloud, generateQueryLocal]);
+  const getChatLevel = () => {
+    if (aiProvider === 'none') return 'off';
+    if (aiProvider === 'cloud') return 'cloud';
+    if (aiProvider === 'local' && isLocalReady) return 'local';
+    if (aiProvider === 'local' && localLLMStatus.stage === 'loading') return 'loading...';
+    return 'off';
+  };
 
-  // Process with AI (cloud or local)
-  const processWithAI = useCallback(async (query: string): Promise<string> => {
-    // Generate DSL query from AI
-    let aiOutput: string;
-    try {
-      aiOutput = await generateQuery(query);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      if (message.includes('Rate limit')) {
-        throw new Error('Too many requests. Please wait a moment and try again.');
-      }
-      if (message.includes('not initialized')) {
-        throw new Error('Local AI is still loading. Please wait for it to finish.');
-      }
-      throw new Error(`AI request failed: ${message}`);
+  const formatValue = (col: string, value: unknown): string => {
+    if (value === null || value === undefined) return 'none';
+    
+    const colLower = col.toLowerCase();
+    const isMonetary = colLower.includes('amount') || colLower.includes('total') || colLower.includes('sum');
+    
+    if (isMonetary && typeof value === 'number') {
+      return `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
     }
     
-    const parsedQuery = parseQueryFromLLM(aiOutput);
-    
-    if (!parsedQuery) {
-      // Log for debugging
-      console.warn('Failed to parse AI output:', aiOutput);
-      throw new Error('AI returned an invalid response. Try a simpler question like "total spending" or "biggest expense".');
-    }
-    
-    // If AI says we need semantic search, get matching transaction IDs
-    if (parsedQuery.needsSemanticSearch && parsedQuery.semanticQuery && isSemanticReady) {
-      try {
-        const searchQuery = parsedQuery.semanticQuery;
-        const results = await searchEmbeddings(searchQuery, 50);
-        
-        if (results.length > 0) {
-          const matchingIds = results
-            .filter(r => r.score >= 0.25)
-            .map(r => r.id);
-          
-          if (matchingIds.length > 0) {
-            parsedQuery.filters = {
-              ...parsedQuery.filters,
-              ids: matchingIds,
-            };
-          }
-        }
-      } catch {
-        // If semantic search fails, continue without it
+    if (colLower.includes('date') && typeof value === 'string') {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       }
     }
     
-    // Execute the DSL query
-    const result = executeQuery(parsedQuery, transactions);
+    return String(value);
+  };
+
+  const formatResults = (columns: string[], rows: unknown[][]): string => {
+    if (rows.length === 0) return 'No results found';
     
-    return result.summary;
-  }, [generateQuery, transactions, isSemanticReady, searchEmbeddings]);
+    const lines = rows.slice(0, 20).map((row) => {
+      return columns.map((col, i) => `${col}: ${formatValue(col, row[i])}`).join(', ');
+    });
+    
+    if (rows.length > 20) {
+      lines.push(`... and ${rows.length - 20} more rows`);
+    }
+    
+    return lines.join('\n');
+  };
+
+  const processQuestion = useCallback(async (question: string): Promise<string> => {
+    // Step 1: Generate SQL from question
+    const sql = aiProvider === 'cloud' 
+      ? await generateCloudSQL(question)
+      : await generateLocalSQL(question);
+    
+    // Step 2: Execute SQL locally
+    const { columns, rows } = await executeQuery(sql);
+    
+    // Step 3: Format results and get natural language answer
+    const resultsText = formatResults(columns, rows);
+    const answer = aiProvider === 'cloud'
+      ? await generateCloudAnswer(question, resultsText)
+      : await generateLocalAnswer(question, resultsText);
+    
+    return answer;
+  }, [aiProvider, generateCloudSQL, generateLocalSQL, generateCloudAnswer, generateLocalAnswer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,16 +125,20 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const query = input.trim();
+    const question = input.trim();
     setInput('');
     setIsProcessing(true);
 
     try {
+      if (!dbReady) {
+        throw new Error('Still loading your transactions...');
+      }
+      
       if (!isAIReady) {
         throw new Error('Please select an AI provider in settings first.');
       }
 
-      const response = await processWithAI(query);
+      const response = await processQuestion(question);
 
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -176,14 +170,14 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
 
   const suggestedQuestions = [
     'total spending?',
+    'who did I send money to most?',
     'biggest expense?',
-    'how much on food?',
-    'transport spending?',
+    'spending by month?',
   ];
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
-      <div className="flex max-h-[85vh] flex-col">
+      <div className="flex h-[70vh] flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 pb-3">
           <div className="flex items-center gap-2">
@@ -211,31 +205,10 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
           </div>
         )}
 
-        {/* Embedding Progress */}
-        {(embeddingStatus.stage === 'loading_model' || embeddingStatus.stage === 'embedding') && (
-          <div className="px-4 py-2 border-b border-border">
-            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>
-                {embeddingStatus.stage === 'loading_model' 
-                  ? 'Loading search model...' 
-                  : 'Indexing transactions...'}
-              </span>
-              <span>{embeddingStatus.progress ?? 0}%</span>
-            </div>
-            <div className="h-1 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-accent transition-all duration-300"
-                style={{ width: `${embeddingStatus.progress ?? 0}%` }}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             <div className="space-y-4">
-              {/* AI not configured message */}
               {aiProvider === 'none' && (
                 <div className="tui-box p-3 space-y-2">
                   <p className="text-xs text-muted-foreground">
@@ -249,16 +222,11 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                     >
                       [settings]
                     </button>
-                    {' '}to pick a provider:
+                    {' '}to pick a provider
                   </p>
-                  <ul className="text-xs text-muted-foreground/70 pl-2 space-y-0.5">
-                    <li>• cloud - instant, uses internet</li>
-                    <li>• local - offline, ~135mb download</li>
-                  </ul>
                 </div>
               )}
 
-              {/* Suggested questions (only show if AI is available) */}
               {isAIReady && (
                 <div className="flex flex-wrap gap-1.5 justify-center">
                   {suggestedQuestions.map((q) => (
@@ -282,9 +250,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
             <div className="flex justify-start">
               <div className="tui-box px-3 py-2">
                 <span className="text-xs text-muted-foreground tui-pulse">
-                  {aiProvider === 'cloud' ? 'asking cloud...' : 
-                   aiProvider === 'local' ? 'ai thinking...' : 
-                   'processing...'}
+                  {aiProvider === 'cloud' ? 'asking cloud...' : 'thinking...'}
                 </span>
               </div>
             </div>
@@ -321,7 +287,6 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   );
 }
 
-// Message bubble component with copy functionality
 function MessageBubble({ message }: { message: ChatMessage }) {
   const [copied, setCopied] = useState(false);
   const isError = message.content.startsWith('err:');
@@ -332,7 +297,6 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  // Get display content (remove "err:" prefix for cleaner display)
   const displayContent = isError 
     ? message.content.replace(/^err:\s*/, '') 
     : message.content;

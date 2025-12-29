@@ -135,7 +135,7 @@ export function Dashboard() {
       {/* Chat Sheet */}
       <ChatSheet 
         isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)} 
+        onClose={() => setIsChatOpen(false)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 

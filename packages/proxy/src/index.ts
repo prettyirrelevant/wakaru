@@ -6,9 +6,10 @@ type Bindings = {
   GOOGLE_AI_API_KEY: string;
 };
 
+type Provider = 'google' | 'cloudflare';
+
 const app = new Hono<{ Bindings: Bindings }>();
 
-// CORS configuration
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -18,9 +19,7 @@ const ALLOWED_ORIGINS = [
 app.use('*', cors({
   origin: (origin) => {
     if (!origin) return null;
-    // Allow localhost ports
     if (ALLOWED_ORIGINS.includes(origin)) return origin;
-    // Allow *.pages.dev
     if (origin.endsWith('.pages.dev')) return origin;
     return null;
   },
@@ -29,151 +28,144 @@ app.use('*', cors({
   maxAge: 86400,
 }));
 
-// Rate limiting - in-memory store (resets on worker restart, but good enough)
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 10; // requests per minute
-const RATE_WINDOW = 60 * 1000; // 1 minute in ms
+const SQL_SYSTEM_PROMPT = `You are a SQL query generator for a personal finance database. Convert natural language questions into SQLite queries.
 
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetAt: number } {
-  const now = Date.now();
-  const record = rateLimitStore.get(ip);
-  
-  if (!record || now > record.resetAt) {
-    // New window
-    rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
-    return { allowed: true, remaining: RATE_LIMIT - 1, resetAt: now + RATE_WINDOW };
-  }
-  
-  if (record.count >= RATE_LIMIT) {
-    return { allowed: false, remaining: 0, resetAt: record.resetAt };
-  }
-  
-  record.count++;
-  return { allowed: true, remaining: RATE_LIMIT - record.count, resetAt: record.resetAt };
-}
+Schema:
+  Table: transactions
+  Columns:
+    - id: unique identifier
+    - date: ISO timestamp (YYYY-MM-DDTHH:MM:SS) - use date(date) to extract calendar date for grouping
+    - year, month (1-12), month_name (Jan-Dec), day (1-31)
+    - description, narration: transaction details
+    - amount: value in kobo
+    - amount_naira: value in naira (always positive)
+    - is_inflow: 1 = money received, 0 = money spent
+    - category, transaction_type
+    - bank_source: user's bank
+    - counterparty, counterparty_bank: other party info
+    - reference: transaction reference
 
-// DSL system prompt
-const SYSTEM_PROMPT = `You are a query parser that converts natural language questions about bank transactions into JSON queries. Output ONLY valid JSON, no other text.
+Query rules:
+1. Return ONLY the raw SQL query, no explanation or markdown
+2. Use amount_naira for all monetary calculations (it's always positive)
+3. Use is_inflow=0 for spending/expenses/sent/debits
+4. Use is_inflow=1 for income/received/credits
+5. Alias aggregates clearly: SUM(amount_naira) AS total_amount, COUNT(*) AS transaction_count
+6. For "most/biggest/highest" queries: ORDER BY ... DESC LIMIT 1
+7. For "least/smallest/lowest" queries: ORDER BY ... ASC LIMIT 1
+8. For "what day" or "when" questions: SELECT date(date) AS calendar_date, GROUP BY date(date) if aggregating
+9. For "which month" questions: include both month_name and year
+10. Use LIKE with % wildcards for partial text matching (case-insensitive with LOWER())
+11. For date ranges: use date BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD'
+12. Default to current year if no year specified and query is time-bound
 
-JSON Schema:
-{
-  "action": "sum" | "count" | "list" | "max" | "min" | "average",
-  "needsSemanticSearch": boolean,
-  "semanticQuery": "search terms for finding relevant transactions",
-  "filters": {
-    "type": "inflow" | "outflow" | "all"
-  }
-}
+Examples:
+  "how much did I spend in January?" → SELECT SUM(amount_naira) AS total_amount FROM transactions WHERE month = 1 AND is_inflow = 0
+  "biggest transaction this year" → SELECT * FROM transactions WHERE year = strftime('%Y', 'now') ORDER BY amount_naira DESC LIMIT 1
+  "who did I send money to most?" → SELECT counterparty, SUM(amount_naira) AS total_amount FROM transactions WHERE is_inflow = 0 AND counterparty IS NOT NULL GROUP BY counterparty ORDER BY total_amount DESC LIMIT 1
+  "what day did I spend the most?" → SELECT date(date) AS calendar_date, SUM(amount_naira) AS total_amount FROM transactions WHERE is_inflow = 0 GROUP BY date(date) ORDER BY total_amount DESC LIMIT 1`;
 
-Rules:
-- "total spending" or "how much did I spend" → {"action":"sum","filters":{"type":"outflow"},"needsSemanticSearch":false}
-- "total income" or "how much did I receive" → {"action":"sum","filters":{"type":"inflow"},"needsSemanticSearch":false}
-- "biggest expense" or "largest purchase" → {"action":"max","filters":{"type":"outflow"},"needsSemanticSearch":false}
-- "how much on food/transport/etc" → {"action":"sum","filters":{"type":"outflow"},"needsSemanticSearch":true,"semanticQuery":"relevant search terms"}
-- "list transactions" or "show me" → {"action":"list","needsSemanticSearch":false}
-- "how many transactions" → {"action":"count","needsSemanticSearch":false}
-- "average spending" → {"action":"average","filters":{"type":"outflow"},"needsSemanticSearch":false}
+const ANSWER_SYSTEM_PROMPT = `You are a friendly financial assistant. Given the user's question and the SQL query results, provide a clear, direct answer.
 
-For semantic queries, expand the search terms. Example:
-- "food" → "food restaurant groceries supermarket eating"
-- "transport" → "transport uber bolt taxi fuel petrol"
-- "entertainment" → "entertainment netflix spotify cinema movies games"
+Response guidelines:
+1. Answer the question in 1-2 sentences
+2. Format money as ₦X,XXX.XX (naira with commas, include kobo only if non-zero)
+3. Format dates naturally: "January 15th, 2024" not "2024-01-15"
+4. For empty results: say you couldn't find matching transactions, suggest checking the criteria
+5. For lists: present the top items clearly, mention if there are more
+6. Round percentages to one decimal place
+7. Use a conversational but informative tone
 
-Output JSON only:`;
+Handle edge cases:
+- If total is 0 or null: "you didn't have any [spending/income] matching that criteria"
+- If asking about a counterparty with no results: "I couldn't find any transactions with [name]"
+- If the query returned multiple rows for a "most/biggest" question: focus on the top result
 
-// Provider: Cloudflare AI
-async function generateWithCloudflare(ai: Ai, question: string): Promise<string> {
-  const response = await ai.run('@cf/meta/llama-3.1-8b-instruct' as Parameters<typeof ai.run>[0], {
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: question },
-    ],
-    max_tokens: 200,
-    temperature: 0.1,
-  } as Record<string, unknown>);
-  
-  // Extract response text
+Do not:
+- Mention SQL, queries, or databases
+- Show raw column names
+- Repeat the question back unnecessarily`;
+
+async function generateWithCloudflare(ai: Ai, prompt: string, maxTokens = 300): Promise<string> {
+  const response = await ai.run(
+    '@cf/meta/llama-3.1-8b-instruct' as Parameters<typeof ai.run>[0],
+    { messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature: 0.1 } as Record<string, unknown>
+  );
+
   const result = response as { response?: string };
   if (result.response && typeof result.response === 'string') {
     return result.response;
   }
-  
+
   throw new Error('Unexpected Cloudflare AI response format');
 }
 
-// Provider: Google AI (Gemini)
-async function generateWithGoogle(apiKey: string, question: string): Promise<string> {
+async function generateWithGoogle(apiKey: string, prompt: string, maxTokens = 300): Promise<string> {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          parts: [{ text: `${SYSTEM_PROMPT}\n\nQuestion: ${question}` }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 200,
-        },
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens },
       }),
     }
   );
-  
+
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Google AI error: ${error}`);
+    throw new Error(`Google AI error: ${await response.text()}`);
   }
-  
+
   const data = await response.json() as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string }>;
-      };
-    }>;
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
-  
+
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
     throw new Error('No response from Google AI');
   }
-  
+
   return text;
 }
 
-// Extract JSON from response
-function extractJson(text: string): object | null {
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  
-  try {
-    return JSON.parse(match[0]);
-  } catch {
-    return null;
-  }
+async function generate(
+  provider: Provider,
+  ai: Ai,
+  googleApiKey: string,
+  prompt: string,
+  maxTokens = 300
+): Promise<string> {
+  return provider === 'google'
+    ? generateWithGoogle(googleApiKey, prompt, maxTokens)
+    : generateWithCloudflare(ai, prompt, maxTokens);
 }
 
-// Main chat endpoint
-app.post('/api/chat', async (c) => {
-  // Get client IP
-  const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
+function getProviders(): Provider[] {
+  return Math.random() < 0.5 ? ['google', 'cloudflare'] : ['cloudflare', 'google'];
+}
+
+function extractSQL(text: string): string | null {
+  const cleaned = text.trim();
   
-  // Check rate limit
-  const rateLimit = checkRateLimit(ip);
-  
-  // Set rate limit headers
-  c.header('X-RateLimit-Limit', RATE_LIMIT.toString());
-  c.header('X-RateLimit-Remaining', rateLimit.remaining.toString());
-  c.header('X-RateLimit-Reset', Math.ceil(rateLimit.resetAt / 1000).toString());
-  
-  if (!rateLimit.allowed) {
-    return c.json(
-      { error: 'Rate limit exceeded. Try again later.' },
-      429
-    );
+  // Try to find SQL in code blocks
+  const codeBlockMatch = cleaned.match(/```(?:sql)?\s*([\s\S]*?)```/i);
+  if (codeBlockMatch) {
+    return codeBlockMatch[1].trim();
   }
   
-  // Parse request
+  // Check if the response starts with SELECT/WITH
+  if (/^(SELECT|WITH)\s/i.test(cleaned)) {
+    // Take everything up to a semicolon or end
+    const match = cleaned.match(/^((?:SELECT|WITH)[\s\S]*?);?\s*$/i);
+    return match ? match[1].trim() : cleaned;
+  }
+  
+  return null;
+}
+
+// Generate SQL from question
+app.post('/api/sql', async (c) => {
   let question: string;
   try {
     const body = await c.req.json<{ question?: string }>();
@@ -181,53 +173,67 @@ app.post('/api/chat', async (c) => {
   } catch {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
-  
+
   if (!question) {
     return c.json({ error: 'Question is required' }, 400);
   }
-  
-  if (question.length > 500) {
-    return c.json({ error: 'Question too long (max 500 characters)' }, 400);
-  }
-  
-  // Randomly pick provider (50/50)
-  const useGoogle = Math.random() < 0.5 && c.env.GOOGLE_AI_API_KEY;
-  const provider = useGoogle ? 'google' : 'cloudflare';
-  
-  console.log(`[chat] provider=${provider} question="${question.slice(0, 50)}${question.length > 50 ? '...' : ''}"`);
-  
-  try {
-    let responseText: string;
-    
-    if (useGoogle) {
-      responseText = await generateWithGoogle(c.env.GOOGLE_AI_API_KEY, question);
-    } else {
-      responseText = await generateWithCloudflare(c.env.AI, question);
+
+  const prompt = `${SQL_SYSTEM_PROMPT}\n\nQuestion: ${question}\n\nSQL:`;
+  const providers = getProviders();
+  let lastError: Error | null = null;
+
+  for (const provider of providers) {
+    try {
+      const response = await generate(provider, c.env.AI, c.env.GOOGLE_AI_API_KEY, prompt, 200);
+      const sql = extractSQL(response);
+      
+      if (!sql) {
+        throw new Error('Could not extract SQL from response');
+      }
+      
+      return c.json({ sql, provider });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
-    
-    console.log(`[chat] provider=${provider} success`);
-    
-    // Extract and validate JSON
-    const query = extractJson(responseText);
-    
-    if (!query) {
-      console.log(`[chat] provider=${provider} error="Failed to parse JSON"`);
-      return c.json({ error: 'Failed to parse AI response' }, 500);
-    }
-    
-    return c.json({ query, provider });
-  } catch (error) {
-    console.error(`[chat] provider=${provider} error:`, error);
-    return c.json(
-      { error: 'AI service temporarily unavailable' },
-      503
-    );
   }
+
+  console.error('[sql] all providers failed:', lastError);
+  return c.json({ error: 'Could not generate SQL query' }, 503);
 });
 
-// Health check
-app.get('/health', (c) => {
-  return c.json({ status: 'ok', timestamp: Date.now() });
+// Generate answer from question + results
+app.post('/api/answer', async (c) => {
+  let question: string;
+  let results: string;
+  try {
+    const body = await c.req.json<{ question?: string; results?: string }>();
+    question = body.question?.trim() || '';
+    results = body.results?.trim() || '';
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  if (!question || !results) {
+    return c.json({ error: 'Question and results are required' }, 400);
+  }
+
+  const prompt = `${ANSWER_SYSTEM_PROMPT}\n\nQuestion: ${question}\n\nQuery Results:\n${results}\n\nAnswer:`;
+  const providers = getProviders();
+  let lastError: Error | null = null;
+
+  for (const provider of providers) {
+    try {
+      const response = await generate(provider, c.env.AI, c.env.GOOGLE_AI_API_KEY, prompt, 150);
+      return c.json({ answer: response.trim(), provider });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  console.error('[answer] all providers failed:', lastError);
+  return c.json({ error: 'Could not generate answer' }, 503);
 });
+
+app.get('/health', (c) => c.json({ status: 'ok', timestamp: Date.now() }));
 
 export default app;
