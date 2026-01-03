@@ -8,35 +8,6 @@
 /* TUI-inspired design system */
 @layer base {
   :root {
-    /* Core palette - warm terminal aesthetic */
-    --background: 40 6% 7%;
-    --foreground: 45 20% 90%;
-    
-    /* Muted tones */
-    --muted: 40 4% 12%;
-    --muted-foreground: 40 8% 55%;
-    
-    /* Borders - subtle */
-    --border: 40 6% 18%;
-    --border-strong: 40 6% 25%;
-    
-    /* Accent colors */
-    --accent: 45 100% 60%;
-    --accent-foreground: 40 6% 7%;
-    
-    /* Semantic colors */
-    --success: 142 70% 45%;
-    --success-muted: 142 30% 20%;
-    --destructive: 0 70% 55%;
-    --destructive-muted: 0 30% 20%;
-    --warning: 38 92% 50%;
-    --warning-muted: 38 40% 20%;
-    
-    /* Ring for focus states */
-    --ring: 45 100% 60%;
-  }
-
-  .dark {
     --background: 40 6% 7%;
     --foreground: 45 20% 90%;
     --muted: 40 4% 12%;
@@ -54,25 +25,22 @@
     --ring: 45 100% 60%;
   }
 
-  /* Light mode - inverted but still TUI feel */
-  @media (prefers-color-scheme: light) {
-    :root:not(.dark) {
-      --background: 45 20% 96%;
-      --foreground: 40 6% 10%;
-      --muted: 45 10% 90%;
-      --muted-foreground: 40 6% 45%;
-      --border: 40 6% 82%;
-      --border-strong: 40 6% 70%;
-      --accent: 40 100% 35%;
-      --accent-foreground: 45 20% 96%;
-      --success: 142 70% 35%;
-      --success-muted: 142 40% 90%;
-      --destructive: 0 70% 45%;
-      --destructive-muted: 0 40% 92%;
-      --warning: 38 92% 45%;
-      --warning-muted: 38 50% 90%;
-      --ring: 40 100% 35%;
-    }
+  .light {
+    --background: 45 20% 96%;
+    --foreground: 40 6% 10%;
+    --muted: 45 10% 90%;
+    --muted-foreground: 40 6% 45%;
+    --border: 40 6% 82%;
+    --border-strong: 40 6% 70%;
+    --accent: 40 100% 35%;
+    --accent-foreground: 45 20% 96%;
+    --success: 142 70% 35%;
+    --success-muted: 142 40% 90%;
+    --destructive: 0 70% 45%;
+    --destructive-muted: 0 40% 92%;
+    --warning: 38 92% 45%;
+    --warning-muted: 38 50% 90%;
+    --ring: 40 100% 35%;
   }
 }
 

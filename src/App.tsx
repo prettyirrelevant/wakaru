@@ -18,17 +18,17 @@ export function App() {
     initTransactions();
   }, [initSettings, initTransactions]);
 
-  // Apply theme
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else if (theme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      // System preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.toggle('dark', prefersDark);
+    root.classList.remove('light');
+    
+    if (theme === 'light') {
+      root.classList.add('light');
+    } else if (theme === 'system') {
+      const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      if (prefersLight) {
+        root.classList.add('light');
+      }
     }
   }, [theme]);
 
