@@ -3,6 +3,7 @@ import { KudaParser } from '~/lib/parsers/kuda';
 import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
 import { WemaBankParser } from '~/lib/parsers/wema';
+import { ZenithBankParser } from '~/lib/parsers/zenith';
 import {
   extractRowsFromExcel,
   extractRowsFromCsv,
@@ -24,6 +25,7 @@ const parsers = {
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
   wemabank: new WemaBankParser(),
+  zenith: new ZenithBankParser(),
 } as const;
 
 const parserApi = {
@@ -97,6 +99,11 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   if (bankType === 'palmpay') {
     const text = await extractTextFromPdf(buffer);
     return PalmPayParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'zenith') {
+    const text = await extractTextFromPdf(buffer);
+    return ZenithBankParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'opay') {
