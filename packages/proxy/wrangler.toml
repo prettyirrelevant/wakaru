@@ -5,6 +5,11 @@ compatibility_date = "2024-12-01"
 [ai]
 binding = "AI"
 
+[[ratelimits]]
+name = "CHAT_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
 [observability.logs]
 enabled = true
 head_sampling_rate = 1

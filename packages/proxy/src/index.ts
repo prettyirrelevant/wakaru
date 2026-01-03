@@ -7,7 +7,12 @@ import { z } from 'zod';
 type Bindings = {
   GOOGLE_AI_API_KEY: string;
   AI: Ai;
+  CHAT_RATE_LIMITER: RateLimit;
 };
+
+interface RateLimit {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -150,6 +155,21 @@ const queryDatabaseTool = tool({
   inputSchema: z.object({
     sql: z.string().describe('A valid SQLite SELECT query for the transactions table'),
   }),
+});
+
+app.use('/api/chat', async (c, next) => {
+  const clientIP = c.req.header('cf-connecting-ip');
+  if (!clientIP) {
+    await next();
+    return;
+  }
+
+  const { success } = await c.env.CHAT_RATE_LIMITER.limit({ key: clientIP });
+  if (!success) {
+    return c.json({ error: 'Rate limit exceeded. Please try again later.' }, 429);
+  }
+
+  await next();
 });
 
 app.post('/api/chat', async (c) => {
