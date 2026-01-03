@@ -61,6 +61,7 @@ export enum BankType {
   UBA = 'uba',
   Fidelity = 'fidelity',
   StandardChartered = 'standardchartered',
+  FCMB = 'fcmb',
 }
 
 export enum TransactionCategory {
