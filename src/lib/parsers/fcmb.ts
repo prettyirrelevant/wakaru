@@ -153,7 +153,7 @@ export class FcmbParser implements BankParser {
     const appToMatch = description.match(/App(?:\s*:?\s*\w*)?\s+To\s+([^\d]+)/i);
     if (appToMatch) {
       const parts = appToMatch[1].trim().split(/\s+/);
-      const bankKeywords = ['Opay', 'Palmpay', 'Kuda', 'MONIEPOINT', 'GTBank', 'Wema', 'VFD', 'POCKETAPP'];
+      const bankKeywords = ['Opay', 'Palmpay', 'Kuda', 'MONIEPOINT', 'GTB', 'Wema', 'VFD', 'POCKETAPP'];
       const bankMatch = bankKeywords.find(b => appToMatch[1].toLowerCase().includes(b.toLowerCase()));
       
       if (bankMatch) {

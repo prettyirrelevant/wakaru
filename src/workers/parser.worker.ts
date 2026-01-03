@@ -1,6 +1,7 @@
 import * as Comlink from 'comlink';
 import { AccessParser } from '~/lib/parsers/access';
 import { FcmbParser } from '~/lib/parsers/fcmb';
+import { GtbParser } from '~/lib/parsers/gtb';
 import { KudaParser } from '~/lib/parsers/kuda';
 import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
@@ -26,6 +27,7 @@ type ProgressCallback = (progress: number, message: string) => void;
 const parsers = {
   access: new AccessParser(),
   fcmb: new FcmbParser(),
+  gtb: new GtbParser(),
   kuda: new KudaParser(),
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
@@ -126,6 +128,11 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   if (bankType === 'standardchartered') {
     const text = await extractTextFromPdf(buffer, password);
     return StandardCharteredParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'gtb') {
+    const text = await extractTextFromPdf(buffer, password);
+    return GtbParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'opay') {

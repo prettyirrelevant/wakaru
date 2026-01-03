@@ -96,8 +96,13 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
         );
 
         if (result.error) {
-          if (result.error.toLowerCase().includes('password') || result.error.toLowerCase().includes('decrypt')) {
-            setPasswordError('incorrect password, please try again');
+          const isPasswordError = result.error.toLowerCase().includes('password') || 
+                                  result.error.toLowerCase().includes('decrypt') ||
+                                  result.error.toLowerCase().includes('encrypted');
+          
+          if (isPasswordError) {
+            setPendingFile(file);
+            setPasswordError(filePassword ? 'incorrect password, please try again' : null);
             setUploadStatus({ stage: 'idle' });
           } else {
             setUploadStatus({ stage: 'error', message: result.error });
@@ -116,8 +121,13 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
         }, 1000);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'failed to process file';
-        if (errorMessage.toLowerCase().includes('password') || errorMessage.toLowerCase().includes('decrypt')) {
-          setPasswordError('incorrect password, please try again');
+        const isPasswordError = errorMessage.toLowerCase().includes('password') || 
+                                errorMessage.toLowerCase().includes('decrypt') ||
+                                errorMessage.toLowerCase().includes('encrypted');
+        
+        if (isPasswordError) {
+          setPendingFile(file);
+          setPasswordError(filePassword ? 'incorrect password, please try again' : null);
           setUploadStatus({ stage: 'idle' });
         } else {
           setUploadStatus({ stage: 'error', message: errorMessage });
@@ -131,16 +141,9 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
   const handleFileSelect = useCallback(
     async (file: File) => {
       if (!selectedBank) return;
-
-      if (selectedBankInfo?.requiresPassword) {
-        setPendingFile(file);
-        setPassword('');
-        setPasswordError(null);
-      } else {
-        await processFile(file);
-      }
+      await processFile(file);
     },
-    [selectedBank, selectedBankInfo, processFile]
+    [selectedBank, processFile]
   );
 
   const handleUnlock = useCallback(async () => {

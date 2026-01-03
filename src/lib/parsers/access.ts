@@ -176,7 +176,7 @@ export class AccessParser implements BankParser {
 
   private resolveBankCode(code: string): string {
     const bankCodes: Record<string, string> = {
-      GTB: 'GTBank',
+      GTB: 'GTB',
       PAY: 'OPay',
       FBN: 'First Bank',
       MMF: 'Moniepoint',
