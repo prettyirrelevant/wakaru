@@ -261,7 +261,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="ask anything..."
                 disabled={isLoading || !chatEnabled}
-                className="flex-1 bg-transparent px-2 py-2 text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+                className="flex-1 bg-transparent px-2 py-2 text-base sm:text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
               />
             </div>
             <button

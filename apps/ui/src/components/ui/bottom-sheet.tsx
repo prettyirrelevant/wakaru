@@ -93,6 +93,8 @@ export const BottomSheet = forwardRef<HTMLDivElement, BottomSheetProps>(
               )}
               style={{ 
                 overscrollBehavior: 'contain',
+                willChange: 'transform',
+                transform: 'translateZ(0)',
               }}
             >
               {/* Drag handle */}
