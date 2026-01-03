@@ -62,6 +62,7 @@ export enum BankType {
   Fidelity = 'fidelity',
   StandardChartered = 'standardchartered',
   FCMB = 'fcmb',
+  Sterling = 'sterling',
 }
 
 export enum TransactionCategory {

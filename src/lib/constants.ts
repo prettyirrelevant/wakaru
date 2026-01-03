@@ -13,6 +13,7 @@ export const SUPPORTED_BANKS: BankInfo[] = [
   { id: BankType.UBA, name: 'UBA', available: true, fileFormat: 'pdf', requiresPassword: true },
   { id: BankType.Fidelity, name: 'Fidelity Bank', available: false },
   { id: BankType.StandardChartered, name: 'Standard Chartered', available: true, fileFormat: 'pdf', requiresPassword: true },
+  { id: BankType.Sterling, name: 'Sterling', available: true, fileFormat: 'pdf', requiresPassword: true },
 ];
 
 const MIME_TYPES = {

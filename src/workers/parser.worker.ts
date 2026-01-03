@@ -6,6 +6,7 @@ import { KudaParser } from '~/lib/parsers/kuda';
 import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
 import { StandardCharteredParser } from '~/lib/parsers/standard-chartered';
+import { SterlingParser } from '~/lib/parsers/sterling';
 import { WemaParser } from '~/lib/parsers/wema';
 import { UbaParser } from '~/lib/parsers/uba';
 import { ZenithParser } from '~/lib/parsers/zenith';
@@ -33,6 +34,7 @@ const parsers = {
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
   standardchartered: new StandardCharteredParser(),
+  sterling: new SterlingParser(),
   uba: new UbaParser(),
   wema: new WemaParser(),
   zenith: new ZenithParser(),
@@ -140,6 +142,11 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   if (bankType === 'uba') {
     const text = await extractTextFromPdf(buffer, password);
     return UbaParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'sterling') {
+    const text = await extractTextFromPdf(buffer, password);
+    return SterlingParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'opay') {
