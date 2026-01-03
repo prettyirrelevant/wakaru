@@ -7,6 +7,7 @@ import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
 import { StandardCharteredParser } from '~/lib/parsers/standard-chartered';
 import { WemaParser } from '~/lib/parsers/wema';
+import { UbaParser } from '~/lib/parsers/uba';
 import { ZenithParser } from '~/lib/parsers/zenith';
 import {
   extractRowsFromExcel,
@@ -32,6 +33,7 @@ const parsers = {
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
   standardchartered: new StandardCharteredParser(),
+  uba: new UbaParser(),
   wema: new WemaParser(),
   zenith: new ZenithParser(),
 } as const;
@@ -133,6 +135,11 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   if (bankType === 'gtb') {
     const text = await extractTextFromPdf(buffer, password);
     return GtbParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'uba') {
+    const text = await extractTextFromPdf(buffer, password);
+    return UbaParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'opay') {
