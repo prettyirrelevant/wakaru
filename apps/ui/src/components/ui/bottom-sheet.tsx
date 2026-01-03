@@ -1,4 +1,4 @@
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion';
 import { forwardRef, useEffect, type ReactNode } from 'react';
 import { cn } from '~/lib/utils';
 
@@ -82,7 +82,7 @@ export const BottomSheet = forwardRef<HTMLDivElement, BottomSheetProps>(
               dragConstraints={{ top: 0 }}
               dragElastic={{ top: 0, bottom: 0.3 }}
               dragListener={false}
-              onDragEnd={(_, info) => {
+              onDragEnd={(_: unknown, info: PanInfo) => {
                 if (info.offset.y > 80 || info.velocity.y > 400) {
                   onClose();
                 }

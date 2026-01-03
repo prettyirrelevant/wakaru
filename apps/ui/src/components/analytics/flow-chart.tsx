@@ -74,7 +74,7 @@ export function FlowChart({ data }: FlowChartProps) {
               tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(value) => millify(value)}
+              tickFormatter={(value: number) => millify(value)}
               width={45}
             />
             <Tooltip content={<CustomTooltip />} />

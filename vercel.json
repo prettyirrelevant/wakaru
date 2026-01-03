@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter @wakaru/ui build",
+  "outputDirectory": "apps/ui/dist",
+  "installCommand": "pnpm install",
+  "framework": "vite"
+}
