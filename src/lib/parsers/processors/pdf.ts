@@ -6,9 +6,9 @@ export async function extractTextFromPdf(buffer: ArrayBuffer, password?: string)
   if (password) {
     const pdf = await getDocumentProxy(uint8Buffer, { password });
     const { text } = await extractText(pdf, { mergePages: true });
-    return text as string;
+    return Array.isArray(text) ? text.join('\n') : text;
   }
   
   const { text } = await extractText(uint8Buffer, { mergePages: true });
-  return text as string;
+  return Array.isArray(text) ? text.join('\n') : text;
 }

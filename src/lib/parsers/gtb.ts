@@ -7,6 +7,7 @@ import {
   TransactionCategory,
   TransactionType,
 } from '~/types';
+import { getMatchIndex } from '~/lib/utils';
 
 const DESCRIPTION_STARTERS = [
   'NIBSS',
@@ -52,8 +53,8 @@ export class GtbParser implements BankParser {
       const currentMatch = dateMatches[i];
       const nextMatch = dateMatches[i + 1];
 
-      const startIdx = currentMatch.index! + currentMatch[0].length;
-      const endIdx = nextMatch ? nextMatch.index! : cleanText.length;
+      const startIdx = getMatchIndex(currentMatch) + currentMatch[0].length;
+      const endIdx = nextMatch ? getMatchIndex(nextMatch) : cleanText.length;
 
       const transDate = currentMatch[1];
       const valueDate = currentMatch[2];
@@ -69,7 +70,7 @@ export class GtbParser implements BankParser {
       const amounts = [...remaining.matchAll(amountPattern)].map((m) => ({
         value: m[0],
         numeric: parseFloat(m[0].replace(/,/g, '')),
-        index: m.index!,
+        index: getMatchIndex(m),
       }));
 
       if (amounts.length < 2) continue;
@@ -131,7 +132,7 @@ export class GtbParser implements BankParser {
     const starterPattern = new RegExp(`(${DESCRIPTION_STARTERS.join('|')}|\\d{12,})`, 'i');
     const starterMatch = afterCode.match(starterPattern);
 
-    if (starterMatch && starterMatch.index! > 0) {
+    if (starterMatch && getMatchIndex(starterMatch) > 0) {
       const branchName = afterCode.slice(0, starterMatch.index).trim();
       const remarks = afterCode.slice(starterMatch.index).trim();
       return { branchCode, branchName, remarks };

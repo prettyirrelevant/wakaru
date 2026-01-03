@@ -7,6 +7,7 @@ import {
   TransactionCategory,
   TransactionType,
 } from '~/types';
+import { getMatchIndex } from '~/lib/utils';
 
 export class UbaParser implements BankParser {
   readonly bankName = 'UBA';
@@ -36,8 +37,8 @@ export class UbaParser implements BankParser {
       const currentMatch = dateMatches[i];
       const nextMatch = dateMatches[i + 1];
 
-      const startIdx = currentMatch.index! + currentMatch[0].length;
-      const endIdx = nextMatch ? nextMatch.index! : cleaned.length;
+      const startIdx = getMatchIndex(currentMatch) + currentMatch[0].length;
+      const endIdx = nextMatch ? getMatchIndex(nextMatch) : cleaned.length;
 
       const transDate = currentMatch[1];
       const valueDate = currentMatch[2];
@@ -51,7 +52,7 @@ export class UbaParser implements BankParser {
       const amounts = [...content.matchAll(amountPattern)].map((m) => ({
         value: m[0],
         numeric: parseFloat(m[0].replace(/,/g, '')),
-        index: m.index!,
+        index: getMatchIndex(m),
       }));
 
       if (amounts.length < 2) continue;

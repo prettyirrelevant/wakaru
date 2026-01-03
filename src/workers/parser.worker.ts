@@ -40,6 +40,10 @@ const parsers = {
   zenith: new ZenithParser(),
 } as const;
 
+function isValidBankType(type: string): type is keyof typeof parsers {
+  return type in parsers;
+}
+
 const parserApi = {
   async parseFile(
     fileBuffer: ArrayBuffer,
@@ -59,10 +63,10 @@ const parserApi = {
 
       onProgress(20, `Found ${rows.length} rows...`);
 
-      const parser = parsers[bankType as keyof typeof parsers];
-      if (!parser) {
+      if (!isValidBankType(bankType)) {
         return { transactions: [], error: `Unsupported bank: ${bankType}` };
       }
+      const parser = parsers[bankType];
 
       const transactions: Transaction[] = [];
       const totalRows = rows.length;

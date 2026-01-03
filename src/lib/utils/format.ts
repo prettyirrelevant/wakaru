@@ -1,4 +1,15 @@
 /**
+ * Safely extract the index from a regex match.
+ * Throws if index is undefined (should never happen for valid matches).
+ */
+export function getMatchIndex(match: RegExpMatchArray | RegExpExecArray): number {
+  if (match.index === undefined) {
+    throw new Error('Match index is undefined - this should never happen for a valid match');
+  }
+  return match.index;
+}
+
+/**
  * Format amount in kobo to Naira with currency symbol
  */
 export function formatCurrency(amountInKobo: number): string {

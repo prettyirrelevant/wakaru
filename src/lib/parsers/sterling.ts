@@ -7,6 +7,7 @@ import {
   TransactionCategory,
   TransactionType,
 } from '~/types';
+import { getMatchIndex } from '~/lib/utils';
 
 export class SterlingParser implements BankParser {
   readonly bankName = 'Sterling';
@@ -36,8 +37,8 @@ export class SterlingParser implements BankParser {
       const currentMatch = dateMatches[i];
       const nextMatch = dateMatches[i + 1];
 
-      const startIdx = currentMatch.index!;
-      const endIdx = nextMatch ? nextMatch.index! : cleanText.length;
+      const startIdx = getMatchIndex(currentMatch);
+      const endIdx = nextMatch ? getMatchIndex(nextMatch) : cleanText.length;
 
       const transactionText = cleanText.slice(startIdx, endIdx).trim();
 
@@ -53,7 +54,7 @@ export class SterlingParser implements BankParser {
       const amounts = [...transactionText.matchAll(amountPattern)].map((m) => ({
         value: m[0],
         numeric: m[0] === '-' ? null : parseFloat(m[0].replace(/,/g, '')),
-        index: m.index!,
+        index: getMatchIndex(m),
       }));
 
       if (amounts.length >= 3) {

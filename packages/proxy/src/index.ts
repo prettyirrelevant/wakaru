@@ -173,14 +173,18 @@ app.use('/api/chat', async (c, next) => {
 });
 
 app.post('/api/chat', async (c) => {
-  const { messages } = await c.req.json<{ messages: unknown[] }>();
+  const body = await c.req.json<{ messages: unknown }>();
+
+  if (!body.messages || !Array.isArray(body.messages)) {
+    return c.json({ error: 'Invalid request: messages must be an array' }, 400);
+  }
 
   const google = createGoogleGenerativeAI({ apiKey: c.env.GOOGLE_AI_API_KEY });
 
   const result = streamText({
     model: google('gemini-2.0-flash'),
     system: SYSTEM_PROMPT,
-    messages: await convertToModelMessages(messages as Parameters<typeof convertToModelMessages>[0]),
+    messages: await convertToModelMessages(body.messages as Parameters<typeof convertToModelMessages>[0]),
     tools: {
       queryDatabase: queryDatabaseTool,
     },

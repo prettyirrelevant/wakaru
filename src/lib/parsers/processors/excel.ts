@@ -15,9 +15,9 @@ export function extractRowsFromExcel(buffer: ArrayBuffer, sheetName?: string): R
     header: 1,
   });
   
-  return rawData.map((row) =>
-    row.map((cell) =>
+  return rawData.map((row): RawRow =>
+    row.map((cell): string | number | undefined =>
       cell === null || cell === undefined ? undefined : String(cell)
-    ) as RawRow
+    )
   );
 }

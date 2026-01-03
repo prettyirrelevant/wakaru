@@ -75,8 +75,9 @@ export class PalmPayParser implements BankParser {
         } else if (result.length > 0) {
           const prevRow = result[result.length - 1];
           const descColIdx = prevRow.length > 1 ? 1 : 0;
-          if (prevRow && prevRow[descColIdx] !== undefined) {
-            prevRow[descColIdx] = prevRow[descColIdx]!.toString() + ' ' + continuationText;
+          const existingValue = prevRow[descColIdx];
+          if (prevRow && existingValue !== undefined) {
+            prevRow[descColIdx] = String(existingValue) + ' ' + continuationText;
           }
         }
       } else {

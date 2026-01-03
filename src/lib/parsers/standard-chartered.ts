@@ -7,6 +7,7 @@ import {
   TransactionCategory,
   TransactionType,
 } from '~/types';
+import { getMatchIndex } from '~/lib/utils';
 
 interface ExtractedRow {
   date: string;
@@ -63,7 +64,7 @@ export class StandardCharteredParser implements BankParser {
       const amountPattern = /([\d,]+\.\d{2})/g;
       const amounts = [...content.matchAll(amountPattern)].map((m) => ({
         value: m[1],
-        index: m.index!,
+        index: getMatchIndex(m),
         numericValue: parseFloat(m[1].replace(/,/g, '')),
       }));
 
