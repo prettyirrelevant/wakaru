@@ -52,27 +52,34 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ transactions });
   },
 
-  addParsedTransactions: async (transactions) => {
-    if (transactions.length === 0) {
+  addParsedTransactions: async (newTransactions) => {
+    if (newTransactions.length === 0) {
       set({
         status: { stage: 'error', message: 'No transactions found in file' },
       });
       return;
     }
 
-    // Save to database
     set({
       status: { stage: 'parsing', progress: 95, message: 'Saving...' },
     });
 
-    await addTransactions(transactions);
-    const dateRange = getDateRange(transactions);
+    await addTransactions(newTransactions);
+
+    const existing = get().transactions;
+    const existingIds = new Set(existing.map((t) => t.id));
+    const uniqueNew = newTransactions.filter((t) => !existingIds.has(t.id));
+    const merged = [...existing, ...uniqueNew].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    const dateRange = getDateRange(merged);
 
     set({
-      transactions,
+      transactions: merged,
       status: {
         stage: 'complete',
-        transactionCount: transactions.length,
+        transactionCount: merged.length,
         dateRange,
       },
     });
