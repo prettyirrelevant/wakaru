@@ -3,6 +3,7 @@ import { AccessParser } from '~/lib/parsers/access';
 import { KudaParser } from '~/lib/parsers/kuda';
 import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
+import { StandardCharteredParser } from '~/lib/parsers/standard-chartered';
 import { WemaParser } from '~/lib/parsers/wema';
 import { ZenithParser } from '~/lib/parsers/zenith';
 import {
@@ -26,6 +27,7 @@ const parsers = {
   kuda: new KudaParser(),
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
+  standardchartered: new StandardCharteredParser(),
   wema: new WemaParser(),
   zenith: new ZenithParser(),
 } as const;
@@ -35,12 +37,13 @@ const parserApi = {
     fileBuffer: ArrayBuffer,
     fileName: string,
     bankType: BankType,
+    password: string | undefined,
     onProgress: ProgressCallback
   ): Promise<ParseResult> {
     try {
       onProgress(5, 'Reading file...');
 
-      let rows = await extractRows(fileBuffer, fileName, bankType);
+      let rows = await extractRows(fileBuffer, fileName, bankType, password);
 
       if (bankType === 'palmpay' && !fileName.toLowerCase().endsWith('.pdf')) {
         rows = PalmPayParser.preprocessRows(rows);
@@ -90,7 +93,7 @@ const parserApi = {
   },
 };
 
-async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: BankType): Promise<RawRow[]> {
+async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: BankType, password?: string): Promise<RawRow[]> {
   const ext = fileName.toLowerCase();
   
   if (bankType === 'access') {
@@ -111,6 +114,11 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   if (bankType === 'zenith') {
     const text = await extractTextFromPdf(buffer);
     return ZenithParser.extractRowsFromPdfText(text);
+  }
+  
+  if (bankType === 'standardchartered') {
+    const text = await extractTextFromPdf(buffer, password);
+    return StandardCharteredParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'opay') {

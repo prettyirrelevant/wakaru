@@ -5,6 +5,7 @@ import type { FileFormat } from '~/types';
 
 interface DropZoneProps {
   onFileSelect: (file: File) => void;
+  onError?: (message: string) => void;
   disabled?: boolean;
   fileFormat?: FileFormat;
 }
@@ -15,8 +16,34 @@ const FORMAT_LABELS: Record<FileFormat, string> = {
   csv: '.csv',
 };
 
-export function DropZone({ onFileSelect, disabled, fileFormat }: DropZoneProps) {
+const FORMAT_EXTENSIONS: Record<FileFormat, string[]> = {
+  pdf: ['.pdf'],
+  excel: ['.xlsx', '.xls'],
+  csv: ['.csv'],
+};
+
+const FORMAT_ACCEPT: Record<FileFormat, string> = {
+  pdf: 'application/pdf,.pdf',
+  excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.xlsx,.xls',
+  csv: 'text/csv,application/csv,.csv',
+};
+
+function validateFileFormat(file: File, expectedFormat: FileFormat): boolean {
+  const fileName = file.name.toLowerCase();
+  const validExtensions = FORMAT_EXTENSIONS[expectedFormat];
+  return validExtensions.some(ext => fileName.endsWith(ext));
+}
+
+export function DropZone({ onFileSelect, onError, disabled, fileFormat }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
+
+  const handleFile = useCallback((file: File) => {
+    if (fileFormat && !validateFileFormat(file, fileFormat)) {
+      onError?.(`expected ${FORMAT_LABELS[fileFormat]} file`);
+      return;
+    }
+    onFileSelect(file);
+  }, [fileFormat, onFileSelect, onError]);
 
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -42,22 +69,24 @@ export function DropZone({ onFileSelect, disabled, fileFormat }: DropZoneProps) 
 
       const file = e.dataTransfer.files[0];
       if (file) {
-        onFileSelect(file);
+        handleFile(file);
       }
     },
-    [onFileSelect, disabled]
+    [handleFile, disabled]
   );
 
   const handleFileInput = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-        onFileSelect(file);
+        handleFile(file);
       }
       e.target.value = '';
     },
-    [onFileSelect]
+    [handleFile]
   );
+
+  const acceptTypes = fileFormat ? FORMAT_ACCEPT[fileFormat] : ACCEPTED_FILE_TYPES;
 
   return (
     <div
@@ -123,7 +152,7 @@ export function DropZone({ onFileSelect, disabled, fileFormat }: DropZoneProps) 
 
         <input
           type="file"
-          accept={ACCEPTED_FILE_TYPES}
+          accept={acceptTypes}
           onChange={handleFileInput}
           disabled={disabled}
           className="sr-only"

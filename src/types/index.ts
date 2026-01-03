@@ -60,6 +60,7 @@ export enum BankType {
   FirstBank = 'firstbank',
   UBA = 'uba',
   Fidelity = 'fidelity',
+  StandardChartered = 'standardchartered',
 }
 
 export enum TransactionCategory {
@@ -74,6 +75,7 @@ export interface BankInfo {
   name: string;
   available: boolean;
   fileFormat?: FileFormat;
+  requiresPassword?: boolean;
 }
 
 export interface ProcessingStats {

@@ -12,6 +12,7 @@ interface ParserApi {
     fileBuffer: ArrayBuffer,
     fileName: string,
     bankType: BankType,
+    password: string | undefined,
     onProgress: (progress: number, message: string) => void
   ): Promise<{ transactions: Transaction[]; error?: string }>;
 }
@@ -28,13 +29,26 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
     progress?: number;
     message?: string;
   }>({ stage: 'idle' });
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const apiRef = useRef<Comlink.Remote<ParserApi> | null>(null);
 
   const addParsedTransactions = useTransactionStore((s) => s.addParsedTransactions);
 
-  // Initialize worker when sheet opens
+  const selectedBankInfo = useMemo(
+    () => SUPPORTED_BANKS.find((b) => b.id === selectedBank),
+    [selectedBank]
+  );
+
+  useEffect(() => {
+    setPendingFile(null);
+    setPassword('');
+    setPasswordError(null);
+  }, [selectedBank]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -51,18 +65,21 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
     };
   }, [isOpen]);
 
-  // Reset state when sheet closes
   useEffect(() => {
     if (!isOpen) {
       setUploadStatus({ stage: 'idle' });
       setSelectedBank(null);
+      setPendingFile(null);
+      setPassword('');
+      setPasswordError(null);
     }
   }, [isOpen]);
 
-  const handleFileSelect = useCallback(
-    async (file: File) => {
+  const processFile = useCallback(
+    async (file: File, filePassword?: string) => {
       if (!selectedBank || !apiRef.current) return;
 
+      setPasswordError(null);
       setUploadStatus({ stage: 'parsing', progress: 0, message: 'reading file...' });
 
       try {
@@ -72,50 +89,85 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
           buffer,
           file.name,
           selectedBank,
+          filePassword,
           Comlink.proxy((progress: number, message: string) => {
             setUploadStatus({ stage: 'parsing', progress, message: message.toLowerCase() });
           })
         );
 
         if (result.error) {
-          setUploadStatus({ stage: 'error', message: result.error });
+          if (result.error.toLowerCase().includes('password') || result.error.toLowerCase().includes('decrypt')) {
+            setPasswordError('incorrect password, please try again');
+            setUploadStatus({ stage: 'idle' });
+          } else {
+            setUploadStatus({ stage: 'error', message: result.error });
+            setPendingFile(null);
+          }
           return;
         }
 
+        setPendingFile(null);
+        setPassword('');
         await addParsedTransactions(result.transactions as Transaction[]);
         setUploadStatus({ stage: 'success', message: `Added ${result.transactions.length} transactions` });
-        
-        // Close after a short delay on success
+
         setTimeout(() => {
           onClose();
         }, 1000);
       } catch (error) {
-        setUploadStatus({
-          stage: 'error',
-          message: error instanceof Error ? error.message : 'failed to process file',
-        });
+        const errorMessage = error instanceof Error ? error.message : 'failed to process file';
+        if (errorMessage.toLowerCase().includes('password') || errorMessage.toLowerCase().includes('decrypt')) {
+          setPasswordError('incorrect password, please try again');
+          setUploadStatus({ stage: 'idle' });
+        } else {
+          setUploadStatus({ stage: 'error', message: errorMessage });
+          setPendingFile(null);
+        }
       }
     },
     [selectedBank, addParsedTransactions, onClose]
   );
 
-  const isProcessing = uploadStatus.stage === 'parsing';
-  
-  const selectedBankInfo = useMemo(
-    () => SUPPORTED_BANKS.find((b) => b.id === selectedBank),
-    [selectedBank]
+  const handleFileSelect = useCallback(
+    async (file: File) => {
+      if (!selectedBank) return;
+
+      if (selectedBankInfo?.requiresPassword) {
+        setPendingFile(file);
+        setPassword('');
+        setPasswordError(null);
+      } else {
+        await processFile(file);
+      }
+    },
+    [selectedBank, selectedBankInfo, processFile]
   );
+
+  const handleUnlock = useCallback(async () => {
+    if (!pendingFile || !password) return;
+    await processFile(pendingFile, password);
+  }, [pendingFile, password, processFile]);
+
+  const handleCancelPending = useCallback(() => {
+    setPendingFile(null);
+    setPassword('');
+    setPasswordError(null);
+  }, []);
+
+  const handleFileError = useCallback((message: string) => {
+    setUploadStatus({ stage: 'error', message });
+  }, []);
+
+  const isProcessing = uploadStatus.stage === 'parsing';
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
       <div className="px-4 pb-6">
-        {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-accent">$</span>
           <h2 className="text-sm font-semibold">add statement</h2>
         </div>
 
-        {/* Status */}
         {isProcessing && (
           <div className="mb-4 tui-box p-3 space-y-2">
             <div className="flex items-center justify-between text-xs">
@@ -139,17 +191,66 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
           </div>
         )}
 
-        {/* Bank Picker */}
         <div className="mb-4">
           <BankPicker selectedBank={selectedBank} onSelectBank={setSelectedBank} />
         </div>
 
-        {/* Drop Zone */}
-        <DropZone
-          onFileSelect={handleFileSelect}
-          disabled={isProcessing || !selectedBank}
-          fileFormat={selectedBankInfo?.fileFormat}
-        />
+        {pendingFile ? (
+          <div className="tui-box p-4 space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">selected file</p>
+              <p className="text-sm truncate">{pendingFile.name}</p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">
+                this pdf is password protected
+              </label>
+              <input
+                type="password"
+                placeholder="enter password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && password) {
+                    handleUnlock();
+                  }
+                }}
+                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-xs text-destructive">{passwordError}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancelPending}
+                className="flex-1 border border-border px-3 py-2 text-xs hover:bg-muted"
+              >
+                cancel
+              </button>
+              <button
+                onClick={handleUnlock}
+                disabled={!password || isProcessing}
+                className="flex-1 bg-accent text-accent-foreground px-3 py-2 text-xs disabled:opacity-50"
+              >
+                unlock
+              </button>
+            </div>
+          </div>
+        ) : (
+          <DropZone
+            onFileSelect={handleFileSelect}
+            onError={handleFileError}
+            disabled={isProcessing || !selectedBank}
+            fileFormat={selectedBankInfo?.fileFormat}
+          />
+        )}
 
         {!selectedBank && (
           <p className="mt-3 text-center text-xs text-muted-foreground">
