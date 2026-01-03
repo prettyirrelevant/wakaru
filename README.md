@@ -37,6 +37,17 @@ pnpm dev
 
 your bank statement never leaves your browser. when you ask the ai a question, we run the query locally and send the results to generate a response. we only see what you ask about — your full statement stays private.
 
+## thanks
+
+every bank does statements differently. support for these wouldn't be possible without:
+
+- gtb: bukunmi, damola
+- palmpay: mofeoluwa
+- access: ifihan
+- zenith: ifihan
+- standard chartered: damola
+- fcmb: mojola
+
 ## license
 
 mit
