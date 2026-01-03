@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { BottomSheet, Switch } from '~/components/ui';
+import { BottomSheet } from '~/components/ui';
+import { transactionsToCSV, downloadCSV } from '~/lib/csv';
 import { useSettingsStore } from '~/stores/settings';
 import { useTransactionStore } from '~/stores/transactions';
-import { ExportImport } from './export-import';
 import type { Theme } from '~/types';
 
 interface SettingsSheetProps {
@@ -12,18 +12,31 @@ interface SettingsSheetProps {
 
 export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const chatEnabled = useSettingsStore((s) => s.chatEnabled);
   const setChatEnabled = useSettingsStore((s) => s.setChatEnabled);
 
+  const transactions = useTransactionStore((s) => s.transactions);
   const clearAll = useTransactionStore((s) => s.clearAll);
 
   const handleClearData = async () => {
     await clearAll();
     setShowClearConfirm(false);
     onClose();
+  };
+
+  const handleExport = () => {
+    setIsExporting(true);
+    try {
+      const csv = transactionsToCSV(transactions);
+      downloadCSV(csv);
+      onClose();
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const themeOptions: { value: Theme; label: string }[] = [
@@ -70,16 +83,35 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             <div className="text-xs">
               <span className="text-muted-foreground">ai chat</span>
               <span className="text-muted-foreground/50 mx-1">—</span>
-              <span className="text-muted-foreground/70">ask questions about your spending</span>
+              <span className="text-muted-foreground/70">ask about your spending</span>
             </div>
-            <Switch
-              checked={chatEnabled}
-              onCheckedChange={setChatEnabled}
-              aria-label="Enable AI chat"
-            />
+            <div className="flex gap-1">
+              <button
+                onClick={() => setChatEnabled(true)}
+                className={`text-xs px-2 py-0.5 border ${
+                  chatEnabled
+                    ? 'bg-accent text-accent-foreground border-accent'
+                    : 'bg-muted border-border hover:border-border-strong'
+                }`}
+                aria-label="Enable AI chat"
+              >
+                [on]
+              </button>
+              <button
+                onClick={() => setChatEnabled(false)}
+                className={`text-xs px-2 py-0.5 border ${
+                  !chatEnabled
+                    ? 'bg-accent text-accent-foreground border-accent'
+                    : 'bg-muted border-border hover:border-border-strong'
+                }`}
+                aria-label="Disable AI chat"
+              >
+                [off]
+              </button>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground/50">
-            &gt; your data stays on your device. we send your question to ai, get an answer, and keep nothing.
+            &gt; we only see what you ask about. nothing more.
           </p>
         </section>
 
@@ -90,38 +122,47 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <span>data</span>
           </div>
-          <div className="space-y-2">
-            <ExportImport onComplete={onClose} />
-
-            {!showClearConfirm ? (
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="w-full text-left text-xs px-3 py-2 text-destructive hover:bg-destructive-muted border border-transparent hover:border-destructive/30"
-              >
-                [clear all data]
-              </button>
-            ) : (
-              <div className="tui-box border-destructive/30 bg-destructive-muted p-3">
-                <p className="text-xs text-destructive mb-2">
-                  this will delete everything. are you sure?
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleClearData}
-                    className="text-xs px-3 py-1 bg-destructive text-white border border-destructive"
-                  >
-                    yes, clear
-                  </button>
-                  <button
-                    onClick={() => setShowClearConfirm(false)}
-                    className="text-xs px-3 py-1 border border-border hover:bg-muted"
-                  >
-                    cancel
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="flex gap-1">
+            <button
+              onClick={handleExport}
+              disabled={transactions.length === 0 || isExporting}
+              className={`text-xs px-3 py-1.5 border bg-muted border-border hover:border-border-strong disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {isExporting ? 'exporting...' : 'export'}
+            </button>
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              disabled={showClearConfirm}
+              className={`text-xs px-3 py-1.5 border ${
+                showClearConfirm
+                  ? 'bg-destructive text-white border-destructive'
+                  : 'text-destructive bg-muted border-border hover:border-destructive/50'
+              } disabled:cursor-not-allowed`}
+            >
+              delete
+            </button>
           </div>
+          {showClearConfirm && (
+            <div className="tui-box border-destructive/30 bg-destructive-muted p-3 mt-2">
+              <p className="text-xs text-destructive mb-2">
+                this will delete everything. are you sure?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleClearData}
+                  className="text-xs px-3 py-1 bg-destructive text-white border border-destructive"
+                >
+                  yes, clear
+                </button>
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="text-xs px-3 py-1 border border-border hover:bg-muted"
+                >
+                  cancel
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="tui-divider my-4" />

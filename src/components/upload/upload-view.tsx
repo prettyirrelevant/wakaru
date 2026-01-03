@@ -171,10 +171,10 @@ export function UploadView() {
       <div className="mt-8 flex flex-1 flex-col items-center justify-center gap-8">
         <div className="text-center space-y-2">
           <p className="text-sm text-muted-foreground">
-            understand your spending
+            know where your money went
           </p>
           <p className="text-xs text-muted-foreground/70">
-            100% private · runs locally · never leaves your device
+            your bank statement never leaves your device
           </p>
         </div>
 
