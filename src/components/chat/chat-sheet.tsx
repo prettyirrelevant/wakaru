@@ -2,7 +2,11 @@ import ReactMarkdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import { BottomSheet } from '~/components/ui';
+
+dayjs.extend(relativeTime);
 import { useTransactionStore } from '~/stores/transactions';
 import { useSettingsStore } from '~/stores/settings';
 import { loadTransactions, executeQuery } from '~/lib/db/sqlite';
@@ -20,6 +24,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   const [dbReady, setDbReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const messageTimestamps = useRef<Map<string, Date>>(new Map());
 
   const transactions = useTransactionStore((s) => s.transactions);
   const chatEnabled = useSettingsStore((s) => s.chatEnabled);
@@ -102,6 +107,11 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   }, [transactions]);
 
   useEffect(() => {
+    messages.forEach((msg) => {
+      if (!messageTimestamps.current.has(msg.id)) {
+        messageTimestamps.current.set(msg.id, new Date());
+      }
+    });
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -199,19 +209,33 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
               )}
             </div>
           ) : (
-            messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))
-          )}
-          
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="tui-box px-3 py-2">
-                <span className="text-xs text-muted-foreground tui-pulse">
-                  thinking...
-                </span>
-              </div>
-            </div>
+            <>
+              {messages.map((message, index) => (
+                <MessageBubble 
+                  key={message.id} 
+                  message={message}
+                  createdAt={messageTimestamps.current.get(message.id)}
+                  isStreaming={
+                    isLoading && 
+                    message.role === 'assistant' && 
+                    index === messages.length - 1
+                  }
+                />
+              ))}
+              {isLoading && (() => {
+                const lastMsg = messages[messages.length - 1];
+                const lastMsgContent = lastMsg?.parts?.filter((p) => p.type === 'text').map((p) => p.text).join('') || '';
+                const showCursor = lastMsg?.role === 'user' || (lastMsg?.role === 'assistant' && !lastMsgContent);
+                return showCursor ? (
+                  <div className="flex justify-start">
+                    <div className="tui-box px-3 py-2 text-xs">
+                      <span className="text-muted-foreground mr-1">&gt;</span>
+                      <span className="cursor-blink"></span>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+            </>
           )}
           
           {errorMessage && (
@@ -260,9 +284,11 @@ interface MessageBubbleProps {
     role: string;
     parts: Array<{ type: string; text?: string }>;
   };
+  createdAt?: Date;
+  isStreaming?: boolean;
 }
 
-function MessageBubble({ message }: MessageBubbleProps) {
+function MessageBubble({ message, createdAt, isStreaming = false }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
 
   const content = message.parts
@@ -272,6 +298,8 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
   if (!content) return null;
 
+  const timeLabel = createdAt ? dayjs(createdAt).fromNow() : '';
+
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
     setCopied(true);
@@ -279,29 +307,31 @@ function MessageBubble({ message }: MessageBubbleProps) {
   };
 
   return (
-    <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`group flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
       <div
         className={`max-w-[85%] text-xs px-3 py-2 ${
           message.role === 'user' ? 'tui-box-accent' : 'tui-box'
         }`}
       >
-        <div className="flex-1">
-          {message.role === 'assistant' && (
-            <span className="text-muted-foreground mr-1">&gt;</span>
-          )}
-          <div className="tui-markdown"><ReactMarkdown>{content}</ReactMarkdown></div>
-        </div>
-        {message.role === 'assistant' && content && (
-          <div className="mt-2 pt-2 border-t border-border/50 flex justify-end">
-            <button
-              onClick={handleCopy}
-              className="text-muted-foreground hover:text-foreground transition-colors text-xs"
-            >
-              {copied ? 'copied!' : 'copy'}
-            </button>
-          </div>
+        {message.role === 'assistant' && (
+          <span className="text-muted-foreground mr-1">&gt;</span>
         )}
+        <span className="tui-markdown">
+          <ReactMarkdown components={{ p: 'span' }}>{content}</ReactMarkdown>
+        </span>
+        {isStreaming && <span className="cursor-blink ml-0.5"></span>}
       </div>
+      {content && (
+        <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {timeLabel && <span className="text-muted-foreground text-[10px]">{timeLabel}</span>}
+          <button
+            onClick={handleCopy}
+            className="text-muted-foreground hover:text-foreground transition-colors text-[10px]"
+          >
+            {copied ? '[copied]' : '[copy]'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

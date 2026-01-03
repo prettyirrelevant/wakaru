@@ -235,7 +235,7 @@
 
   /* Cursor blink */
   .cursor-blink::after {
-    content: '_';
+    content: '█';
     animation: blink 1s step-end infinite;
     @apply text-accent;
   }
@@ -253,6 +253,10 @@
 
 .tui-markdown p {
   @apply mb-2 last:mb-0;
+}
+
+.tui-markdown > span:not(:first-of-type) {
+  @apply block mt-2;
 }
 
 .tui-markdown strong {
