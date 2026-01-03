@@ -126,7 +126,7 @@ export function Dashboard() {
         )}
 
         {/* Transactions */}
-        <TransactionList transactions={transactions} />
+        <TransactionList transactions={transactions} disableShortcuts={isChatOpen || isSettingsOpen || isUploadOpen} />
       </main>
 
       {/* Chat FAB */}

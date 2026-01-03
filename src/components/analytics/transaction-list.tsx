@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import dayjs from 'dayjs';
 import type { Transaction } from '~/types';
 import { TransactionCategory, TransactionType } from '~/types';
@@ -13,14 +13,29 @@ type SortOrder = 'asc' | 'desc';
 
 interface TransactionListProps {
   transactions: Transaction[];
+  disableShortcuts?: boolean;
 }
 
-export function TransactionList({ transactions }: TransactionListProps) {
+export function TransactionList({ transactions, disableShortcuts = false }: TransactionListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disableShortcuts) return;
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [disableShortcuts]);
 
   const filteredAndSortedTransactions = useMemo(() => {
     let result = transactions;
@@ -112,6 +127,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
           /
         </span>
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="search..."
           value={searchQuery}
