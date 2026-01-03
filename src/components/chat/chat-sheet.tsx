@@ -1,10 +1,14 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { useState, useRef, useEffect } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { BottomSheet } from '~/components/ui';
 import { useTransactionStore } from '~/stores/transactions';
 import { useSettingsStore } from '~/stores/settings';
-import { useLLMStore } from '~/stores/llm';
 import { loadTransactions, executeQuery } from '~/lib/db/sqlite';
-import type { ChatMessage } from '~/types';
+
+const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
+const chatTransport = new DefaultChatTransport({ api: `${PROXY_URL}/api/chat` });
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -13,36 +17,12 @@ interface ChatSheetProps {
 }
 
 export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [dbReady, setDbReady] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const transactions = useTransactionStore((s) => s.transactions);
   const chatEnabled = useSettingsStore((s) => s.chatEnabled);
-  
-  const generateSQL = useLLMStore((s) => s.generateSQL);
-  const generateAnswer = useLLMStore((s) => s.generateAnswer);
-
-  useEffect(() => {
-    if (transactions.length > 0) {
-      loadTransactions(transactions)
-        .then(() => setDbReady(true))
-        .catch((err) => console.error('Failed to load transactions into DB:', err));
-    }
-  }, [transactions]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 300);
-    }
-  }, [isOpen]);
 
   const formatValue = (col: string, value: unknown): string => {
     if (value === null || value === undefined) return 'none';
@@ -78,67 +58,85 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     return lines.join('\n');
   };
 
-  const processQuestion = useCallback(async (question: string): Promise<string> => {
-    const sql = await generateSQL(question);
-    const { columns, rows } = await executeQuery(sql);
-    const resultsText = formatResults(columns, rows);
-    const answer = await generateAnswer(question, resultsText);
-    return answer;
-  }, [generateSQL, generateAnswer]);
+  const [input, setInput] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isProcessing) return;
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: input.trim(),
-      timestamp: Date.now(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    const question = input.trim();
-    setInput('');
-    setIsProcessing(true);
-
-    try {
-      if (!dbReady) {
-        throw new Error('Still loading your transactions...');
+  const {
+    messages,
+    sendMessage,
+    status,
+    error,
+    addToolOutput,
+  } = useChat({
+    transport: chatTransport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onToolCall({ toolCall }) {
+      if (toolCall.toolName === 'queryDatabase') {
+        const input = toolCall.input as { sql: string };
+        executeQuery(input.sql)
+          .then(({ columns, rows }) => {
+            addToolOutput({
+              tool: toolCall.toolName,
+              toolCallId: toolCall.toolCallId,
+              output: formatResults(columns, rows),
+            });
+          })
+          .catch((err) => {
+            addToolOutput({
+              tool: toolCall.toolName,
+              toolCallId: toolCall.toolCallId,
+              output: `Error executing query: ${err instanceof Error ? err.message : 'Unknown error'}`,
+            });
+          });
       }
-      
-      if (!chatEnabled) {
-        throw new Error('Enable chat in settings first.');
-      }
+    },
+  });
 
-      const response = await processQuestion(question);
+  const isLoading = status === 'streaming' || status === 'submitted';
 
-      const assistantMessage: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: response,
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: error instanceof Error 
-          ? `err: ${error.message}`
-          : "err: couldn't process that. try asking differently.",
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
+  useEffect(() => {
+    if (transactions.length > 0) {
+      loadTransactions(transactions)
+        .then(() => setDbReady(true))
+        .catch((err) => console.error('Failed to load transactions into DB:', err));
     }
-  };
+  }, [transactions]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, [isOpen]);
 
   const handleOpenSettings = () => {
     onClose();
     setTimeout(onOpenSettings, 200);
+  };
+
+  const onFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading || !dbReady || !chatEnabled) return;
+    sendMessage({ text: input });
+    setInput('');
+  };
+
+  const getErrorMessage = (): string | null => {
+    if (!error) return null;
+    
+    const errorStr = error.message || String(error);
+    
+    if (errorStr.includes('rate_limit') || errorStr.includes('429')) {
+      return "I'm getting a lot of requests right now! Please try again in a minute or two.";
+    }
+    
+    if (errorStr.includes('service_unavailable') || errorStr.includes('503')) {
+      return "I'm having trouble connecting right now. Please try again in a moment.";
+    }
+    
+    return "Something went wrong. Please try again.";
   };
 
   const suggestedQuestions = [
@@ -148,10 +146,11 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     'spending by month?',
   ];
 
+  const errorMessage = getErrorMessage();
+
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
       <div className="flex h-[70vh] flex-col overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 pb-3">
           <div className="flex items-center gap-2">
             <span className="text-accent">$</span>
@@ -164,7 +163,6 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
           </div>
         </div>
 
-        {/* Messages */}
         <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             <div className="space-y-4">
@@ -205,7 +203,8 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
               <MessageBubble key={message.id} message={message} />
             ))
           )}
-          {isProcessing && (
+          
+          {isLoading && (
             <div className="flex justify-start">
               <div className="tui-box px-3 py-2">
                 <span className="text-xs text-muted-foreground tui-pulse">
@@ -214,11 +213,20 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
               </div>
             </div>
           )}
+          
+          {errorMessage && (
+            <div className="flex justify-start">
+              <div className="tui-box border-destructive/50 bg-destructive/10 px-3 py-2">
+                <span className="text-destructive mr-1">!</span>
+                <span className="text-xs text-destructive">{errorMessage}</span>
+              </div>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <form onSubmit={handleSubmit} className="border-t border-border p-4">
+        <form onSubmit={onFormSubmit} className="border-t border-border p-4">
           <div className="flex gap-2">
             <div className="flex-1 flex items-center tui-box">
               <span className="text-muted-foreground text-xs pl-3">&gt;</span>
@@ -228,13 +236,13 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="ask anything..."
-                disabled={isProcessing}
+                disabled={isLoading || !chatEnabled}
                 className="flex-1 bg-transparent px-2 py-2 text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
               />
             </div>
             <button
               type="submit"
-              disabled={!input.trim() || isProcessing}
+              disabled={!input.trim() || isLoading || !chatEnabled}
               className="tui-btn-primary px-3 py-2 text-xs disabled:opacity-30"
             >
               go
@@ -246,46 +254,44 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+interface MessageBubbleProps {
+  message: {
+    id: string;
+    role: string;
+    parts: Array<{ type: string; text?: string }>;
+  };
+}
+
+function MessageBubble({ message }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
-  const isError = message.content.startsWith('err:');
+
+  const content = message.parts
+    ?.filter((p) => p.type === 'text')
+    .map((p) => p.text)
+    .join('') || '';
+
+  if (!content) return null;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(message.content);
+    await navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const displayContent = isError 
-    ? message.content.replace(/^err:\s*/, '') 
-    : message.content;
-
   return (
-    <div
-      className={`flex ${
-        message.role === 'user' ? 'justify-end' : 'justify-start'
-      }`}
-    >
+    <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[85%] text-xs px-3 py-2 ${
-          message.role === 'user'
-            ? 'tui-box-accent'
-            : isError
-              ? 'tui-box border-destructive/50 bg-destructive/10'
-              : 'tui-box'
+          message.role === 'user' ? 'tui-box-accent' : 'tui-box'
         }`}
       >
         <div className="flex-1">
           {message.role === 'assistant' && (
-            <span className={isError ? 'text-destructive mr-1' : 'text-muted-foreground mr-1'}>
-              {isError ? '!' : '>'}
-            </span>
+            <span className="text-muted-foreground mr-1">&gt;</span>
           )}
-          <span className={`whitespace-pre-wrap ${isError ? 'text-destructive' : ''}`}>
-            {displayContent}
-          </span>
+          <div className="tui-markdown"><ReactMarkdown>{content}</ReactMarkdown></div>
         </div>
-        {!isError && (
+        {message.role === 'assistant' && content && (
           <div className="mt-2 pt-2 border-t border-border/50 flex justify-end">
             <button
               onClick={handleCopy}

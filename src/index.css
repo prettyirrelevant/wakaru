@@ -245,3 +245,77 @@
     50% { opacity: 0; }
   }
 }
+
+/* TUI Markdown styles for chat */
+.tui-markdown {
+  @apply text-xs leading-relaxed;
+}
+
+.tui-markdown p {
+  @apply mb-2 last:mb-0;
+}
+
+.tui-markdown strong {
+  @apply font-semibold text-accent;
+}
+
+.tui-markdown em {
+  @apply italic text-muted-foreground;
+}
+
+.tui-markdown ul, .tui-markdown ol {
+  @apply my-2 ml-4 space-y-1;
+}
+
+.tui-markdown ul {
+  list-style-type: none;
+}
+
+.tui-markdown ul li::before {
+  content: '- ';
+  @apply text-muted-foreground;
+}
+
+.tui-markdown ol {
+  @apply list-decimal;
+}
+
+.tui-markdown ol li::marker {
+  @apply text-muted-foreground;
+}
+
+.tui-markdown table {
+  @apply w-full my-2 border-collapse;
+}
+
+.tui-markdown th {
+  @apply text-left py-1 px-2 border-b border-border text-muted-foreground font-medium;
+}
+
+.tui-markdown td {
+  @apply py-1 px-2 border-b border-border/50;
+}
+
+.tui-markdown tr:last-child td {
+  @apply border-b-0;
+}
+
+.tui-markdown code {
+  @apply bg-muted px-1 py-0.5 text-accent;
+}
+
+.tui-markdown pre {
+  @apply bg-muted p-2 my-2 overflow-x-auto border border-border;
+}
+
+.tui-markdown blockquote {
+  @apply border-l-2 border-accent pl-3 my-2 text-muted-foreground italic;
+}
+
+.tui-markdown a {
+  @apply text-accent underline underline-offset-2;
+}
+
+.tui-markdown hr {
+  @apply my-3 border-border border-dashed;
+}
