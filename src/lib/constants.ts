@@ -6,7 +6,7 @@ export const SUPPORTED_BANKS: BankInfo[] = [
   { id: BankType.Wema, name: 'Wema', available: true, fileFormat: 'pdf' },
   { id: BankType.OPay, name: 'OPay', available: true, fileFormat: 'excel' },
   { id: BankType.GTB, name: 'GTBank', available: false },
-  { id: BankType.Access, name: 'Access Bank', available: false },
+  { id: BankType.Access, name: 'Access', available: true, fileFormat: 'pdf' },
   { id: BankType.Zenith, name: 'Zenith', available: true, fileFormat: 'pdf' },
   { id: BankType.FirstBank, name: 'First Bank', available: false },
   { id: BankType.UBA, name: 'UBA', available: false },

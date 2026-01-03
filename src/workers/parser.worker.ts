@@ -1,4 +1,5 @@
 import * as Comlink from 'comlink';
+import { AccessParser } from '~/lib/parsers/access';
 import { KudaParser } from '~/lib/parsers/kuda';
 import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
@@ -21,6 +22,7 @@ interface ParseResult {
 type ProgressCallback = (progress: number, message: string) => void;
 
 const parsers = {
+  access: new AccessParser(),
   kuda: new KudaParser(),
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
@@ -90,6 +92,11 @@ const parserApi = {
 
 async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: BankType): Promise<RawRow[]> {
   const ext = fileName.toLowerCase();
+  
+  if (bankType === 'access') {
+    const text = await extractTextFromPdf(buffer);
+    return AccessParser.extractRowsFromPdfText(text);
+  }
   
   if (bankType === 'wema') {
     const text = await extractTextFromPdf(buffer);
