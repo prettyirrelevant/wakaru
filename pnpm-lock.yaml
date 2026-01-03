@@ -6,7 +6,37 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/server:
+    dependencies:
+      '@ai-sdk/google':
+        specifier: ^3.0.2
+        version: 3.0.2(zod@3.25.76)
+      ai:
+        specifier: ^6.0.6
+        version: 6.0.6(zod@3.25.76)
+      hono:
+        specifier: ^4.6.0
+        version: 4.11.3
+      workers-ai-provider:
+        specifier: ^3.0.2
+        version: 3.0.2(@ai-sdk/provider-utils@4.0.2(zod@3.25.76))(@ai-sdk/provider@3.0.1)(ai@6.0.6(zod@3.25.76))(zod@3.25.76)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20241127.0
+        version: 4.20251229.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.3
+      wrangler:
+        specifier: ^4.54.0
+        version: 4.54.0(@cloudflare/workers-types@4.20251229.0)
+
+  apps/ui:
     dependencies:
       '@ai-sdk/react':
         specifier: ^3.0.0
@@ -108,34 +138,6 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.19.3)(jiti@1.21.7)
-
-  packages/proxy:
-    dependencies:
-      '@ai-sdk/google':
-        specifier: ^3.0.2
-        version: 3.0.2(zod@3.25.76)
-      ai:
-        specifier: ^6.0.6
-        version: 6.0.6(zod@3.25.76)
-      hono:
-        specifier: ^4.6.0
-        version: 4.11.3
-      workers-ai-provider:
-        specifier: ^3.0.2
-        version: 3.0.2(@ai-sdk/provider-utils@4.0.2(zod@3.25.76))(@ai-sdk/provider@3.0.1)(ai@6.0.6(zod@3.25.76))(zod@3.25.76)
-      zod:
-        specifier: ^3.24.0
-        version: 3.25.76
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.20241127.0
-        version: 4.20251229.0
-      typescript:
-        specifier: ^5.7.2
-        version: 5.7.3
-      wrangler:
-        specifier: ^4.54.0
-        version: 4.54.0(@cloudflare/workers-types@4.20251229.0)
 
 packages:
 
