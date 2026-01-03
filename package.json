@@ -10,5 +10,10 @@
     "lint": "pnpm --filter @wakaru/ui lint",
     "lint:fix": "pnpm --filter @wakaru/ui lint:fix",
     "typecheck": "pnpm -r typecheck"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Isaac Adewumi",
+    "email": "hey@eniola.wtf"
   }
 }

@@ -19,5 +19,10 @@
     "@cloudflare/workers-types": "^4.20241127.0",
     "typescript": "^5.7.2",
     "wrangler": "^4.54.0"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Isaac Adewumi",
+    "email": "hey@eniola.wtf"
   }
 }
