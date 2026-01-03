@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
+import dayjs from 'dayjs';
 import type { Transaction } from '~/types';
 import { TransactionCategory, TransactionType } from '~/types';
-import { formatCurrency, formatDate, formatDateTime, formatDateWithYear } from '~/lib/utils';
+import { formatCurrency, formatDateWithYear } from '~/lib/utils';
 import { cn } from '~/lib/utils';
 import { BottomSheet } from '~/components/ui';
 
@@ -175,31 +176,23 @@ interface TransactionRowProps {
 
 function TransactionRow({ transaction, onClick }: TransactionRowProps) {
   const isInflow = transaction.category === TransactionCategory.Inflow;
-  const typeIcon = getTypeIcon(transaction.meta?.type);
 
   return (
     <button
       onClick={onClick}
       className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors"
     >
-      {/* Type indicator */}
-      <span className="text-muted-foreground text-xs w-4">{typeIcon}</span>
-
-      {/* Description */}
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium">{transaction.description}</p>
         <p 
           className="mt-0.5 text-xs text-muted-foreground truncate"
-          title={formatDateTime(transaction.date)}
+          title={dayjs(transaction.date).format('DD/MM/YYYY h:mm A')}
         >
-          {formatDate(transaction.date)}
-          {transaction.meta?.counterpartyBank && (
-            <span> · {transaction.meta.counterpartyBank}</span>
-          )}
+          {dayjs(transaction.date).format('DD/MM/YYYY')}
+          <span> · {transaction.bankSource}</span>
         </p>
       </div>
 
-      {/* Amount - green for inflow, red for outflow */}
       <div
         className={cn(
           'text-right text-xs font-medium mono-nums shrink-0',
@@ -213,28 +206,7 @@ function TransactionRow({ transaction, onClick }: TransactionRowProps) {
   );
 }
 
-function getTypeIcon(type?: TransactionType): string {
-  switch (type) {
-    case TransactionType.Transfer:
-      return '→';
-    case TransactionType.BillPayment:
-      return '◈';
-    case TransactionType.Airtime:
-      return '◉';
-    case TransactionType.CardPayment:
-      return '▢';
-    case TransactionType.AtmWithdrawal:
-      return '↓';
-    case TransactionType.BankCharge:
-      return '·';
-    case TransactionType.Interest:
-      return '+';
-    case TransactionType.Reversal:
-      return '↺';
-    default:
-      return '·';
-  }
-}
+
 
 interface TransactionDetailSheetProps {
   transaction: Transaction | null;
