@@ -8,8 +8,8 @@ import {
   TransactionType,
 } from '~/types';
 
-export class ZenithBankParser implements BankParser {
-  readonly bankName = 'Zenith Bank';
+export class ZenithParser implements BankParser {
+  readonly bankName = 'Zenith';
 
   static extractRowsFromPdfText(text: string): RawRow[] {
     const rows: RawRow[] = [];

@@ -2,8 +2,8 @@ import * as Comlink from 'comlink';
 import { KudaParser } from '~/lib/parsers/kuda';
 import { OPayParser } from '~/lib/parsers/opay';
 import { PalmPayParser } from '~/lib/parsers/palmpay';
-import { WemaBankParser } from '~/lib/parsers/wema';
-import { ZenithBankParser } from '~/lib/parsers/zenith';
+import { WemaParser } from '~/lib/parsers/wema';
+import { ZenithParser } from '~/lib/parsers/zenith';
 import {
   extractRowsFromExcel,
   extractRowsFromCsv,
@@ -24,8 +24,8 @@ const parsers = {
   kuda: new KudaParser(),
   opay: new OPayParser(),
   palmpay: new PalmPayParser(),
-  wemabank: new WemaBankParser(),
-  zenith: new ZenithBankParser(),
+  wema: new WemaParser(),
+  zenith: new ZenithParser(),
 } as const;
 
 const parserApi = {
@@ -91,9 +91,9 @@ const parserApi = {
 async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: BankType): Promise<RawRow[]> {
   const ext = fileName.toLowerCase();
   
-  if (bankType === 'wemabank') {
+  if (bankType === 'wema') {
     const text = await extractTextFromPdf(buffer);
-    return WemaBankParser.extractRowsFromPdfText(text);
+    return WemaParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'palmpay') {
@@ -103,7 +103,7 @@ async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: Bank
   
   if (bankType === 'zenith') {
     const text = await extractTextFromPdf(buffer);
-    return ZenithBankParser.extractRowsFromPdfText(text);
+    return ZenithParser.extractRowsFromPdfText(text);
   }
   
   if (bankType === 'opay') {

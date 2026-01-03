@@ -8,8 +8,8 @@ import {
   TransactionType,
 } from '~/types';
 
-export class WemaBankParser implements BankParser {
-  readonly bankName = 'Wema Bank';
+export class WemaParser implements BankParser {
+  readonly bankName = 'Wema';
 
   static extractRowsFromPdfText(text: string): RawRow[] {
     const rows: RawRow[] = [];
@@ -88,7 +88,7 @@ export class WemaBankParser implements BankParser {
         description: description || 'Transaction',
         amount,
         category: amount > 0 ? TransactionCategory.Inflow : TransactionCategory.Outflow,
-        bankSource: BankType.WemaBank,
+        bankSource: BankType.Wema,
         reference: reference || this.generateReference(date, description),
         meta,
       };
