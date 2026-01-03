@@ -30,13 +30,14 @@ every bank formats statements differently. support for some of these wouldn't be
 | access | ifihan |
 | fcmb | mojola |
 | gtb | bukunmi, ayomikun, desire |
-| kuda | |
-| opay | |
+| kuda | eniola |
+| opay | eniola |
 | palmpay | mofeoluwa |
 | standard chartered | ayomikun |
 | uba | phebean, ayomikun |
-| wema | |
+| wema | eniola |
 | zenith | ifihan |
+| sterling | feyisara |
 
 ## getting started
 
