@@ -41,12 +41,13 @@ your bank statement never leaves your browser. when you ask the ai a question, w
 
 every bank does statements differently. support for these wouldn't be possible without:
 
-- gtb: bukunmi, damola
+- gtb: bukunmi, ayomikun, desire
 - palmpay: mofeoluwa
 - access: ifihan
 - zenith: ifihan
-- standard chartered: damola
+- standard chartered: ayomikun
 - fcmb: mojola
+- uba: phebean, ayomikun
 
 ## license
 
