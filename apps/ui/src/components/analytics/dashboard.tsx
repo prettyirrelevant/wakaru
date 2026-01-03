@@ -79,8 +79,7 @@ export function Dashboard() {
       <header className="sticky top-0 z-10 border-b border-border bg-background">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-accent">$</span>
-            <h1 className="text-sm font-semibold">wakaru</h1>
+            <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
           </div>
           <div className="flex items-center gap-2">
             <button

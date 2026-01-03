@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="apps/ui/public/logo.png" alt="Wakaru" width="200" />
+</p>
+
 # wakaru
 
 know where your money went. privately.

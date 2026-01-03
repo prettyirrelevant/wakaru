@@ -142,8 +142,7 @@ export function UploadView() {
     <div className="flex min-h-screen flex-col px-4 py-6">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-accent">$</span>
-          <h1 className="text-sm font-semibold">wakaru</h1>
+          <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
         </div>
         <button
           onClick={() => setIsSettingsOpen(true)}
