@@ -68,7 +68,7 @@ Table: \`transactions\`
 | transaction_type | string | type classification |
 | counterparty | string/null | often null |
 | counterparty_bank | string/null | |
-| bank_source | string | which account |
+| bank_source | string | which bank account (kuda, palmpay, wema, opay, gtb, access, zenith, firstbank, uba, fidelity, standard chartered, fcmb, sterling) |
 | reference | string | transaction reference |
 
 **Note:** \`counterparty\` is frequently null. Always use \`COALESCE(counterparty, description) AS recipient\` when identifying who received or sent money.
@@ -78,6 +78,9 @@ Table: \`transactions\`
 **Filtering:**
 - Expenses: \`WHERE is_inflow = 0\`
 - Income: \`WHERE is_inflow = 1\`
+- By bank: \`WHERE bank_source = 'gtb'\` (use lowercase bank names)
+
+**Multi-bank users:** Users may have transactions from multiple banks. When asked about a specific bank (e.g., "GTB transactions", "my Kuda spending"), filter by \`bank_source\`. To see all banks: \`SELECT DISTINCT bank_source FROM transactions\`
 
 **Aggregates:** Always alias them. \`SUM(amount_naira) AS total\`
 
