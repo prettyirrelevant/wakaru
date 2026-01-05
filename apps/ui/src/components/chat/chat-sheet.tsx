@@ -12,7 +12,7 @@ import { executeQuery } from '~/lib/db';
 
 dayjs.extend(relativeTime);
 
-const PROXY_URL = 'https://wakaru-api-dev.ienioladewumi.workers.dev';
+const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
 const chatTransport = new DefaultChatTransport({ api: `${PROXY_URL}/api/chat` });
 
 interface ChatSheetProps {

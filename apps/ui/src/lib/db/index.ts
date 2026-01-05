@@ -1,7 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { live } from '@electric-sql/pglite/live';
 import type { Transaction, TransactionMeta } from '~/types';
-import { migrateFromLegacyDexie } from './migration';
 
 type DbInstance = Awaited<ReturnType<typeof createDb>>;
 
@@ -54,7 +53,6 @@ export async function initDb(): Promise<DbInstance> {
 
   const db = await createDb();
   await db.exec(SCHEMA);
-  await migrateFromLegacyDexie(db);
 
   dbInstance = db;
   return db;
