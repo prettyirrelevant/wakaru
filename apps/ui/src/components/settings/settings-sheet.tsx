@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useLiveQuery } from '@electric-sql/pglite-react';
 import { BottomSheet } from '~/components/ui';
 import { transactionsToCSV, downloadCSV } from '~/lib/csv';
+import { mapRowToTransaction, type TransactionRow } from '~/hooks/useTransactions';
 import { useSettingsStore } from '~/stores/settings';
 import { useTransactionStore } from '~/stores/transactions';
 import type { Theme } from '~/types';
@@ -19,7 +21,11 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const chatEnabled = useSettingsStore((s) => s.chatEnabled);
   const setChatEnabled = useSettingsStore((s) => s.setChatEnabled);
 
-  const transactions = useTransactionStore((s) => s.transactions);
+  const result = useLiveQuery<TransactionRow>('SELECT * FROM transactions ORDER BY date DESC');
+  const transactions = useMemo(
+    () => (result?.rows ?? []).map(mapRowToTransaction),
+    [result?.rows]
+  );
   const clearAll = useTransactionStore((s) => s.clearAll);
 
   const handleClearData = async () => {

@@ -1,17 +1,18 @@
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { usePGlite } from '@electric-sql/pglite-react';
 import { BottomSheet } from '~/components/ui';
+import { useSettingsStore } from '~/stores/settings';
+import { executeQuery } from '~/lib/db';
 
 dayjs.extend(relativeTime);
-import { useTransactionStore } from '~/stores/transactions';
-import { useSettingsStore } from '~/stores/settings';
-import { loadTransactions, executeQuery } from '~/lib/db/sqlite';
 
-const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
+const PROXY_URL = 'https://wakaru-api-dev.ienioladewumi.workers.dev';
 const chatTransport = new DefaultChatTransport({ api: `${PROXY_URL}/api/chat` });
 
 interface ChatSheetProps {
@@ -21,12 +22,11 @@ interface ChatSheetProps {
 }
 
 export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
-  const [dbReady, setDbReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messageTimestamps = useRef<Map<string, Date>>(new Map());
 
-  const transactions = useTransactionStore((s) => s.transactions);
+  const db = usePGlite();
   const chatEnabled = useSettingsStore((s) => s.chatEnabled);
 
   const formatValue = (col: string, value: unknown): string => {
@@ -76,8 +76,8 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onToolCall({ toolCall }) {
       if (toolCall.toolName === 'queryDatabase') {
-        const input = toolCall.input as { sql: string };
-        executeQuery(input.sql)
+        const toolInput = toolCall.input as { sql: string };
+        executeQuery(db, toolInput.sql)
           .then(({ columns, rows }) => {
             addToolOutput({
               tool: toolCall.toolName,
@@ -97,14 +97,6 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
   });
 
   const isLoading = status === 'streaming' || status === 'submitted';
-
-  useEffect(() => {
-    if (transactions.length > 0) {
-      loadTransactions(transactions)
-        .then(() => setDbReady(true))
-        .catch((err) => console.error('Failed to load transactions into DB:', err));
-    }
-  }, [transactions]);
 
   useEffect(() => {
     messages.forEach((msg) => {
@@ -128,7 +120,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
 
   const onFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !dbReady || !chatEnabled) return;
+    if (!input.trim() || isLoading || !chatEnabled) return;
     sendMessage({ text: input });
     setInput('');
   };
@@ -317,7 +309,7 @@ function MessageBubble({ message, createdAt, isStreaming = false }: MessageBubbl
           <span className="text-muted-foreground mr-1">&gt;</span>
         )}
         <span className="tui-markdown">
-          <ReactMarkdown components={{ p: 'span' }}>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: 'span' }}>{content}</ReactMarkdown>
         </span>
         {isStreaming && <span className="cursor-blink ml-0.5"></span>}
       </div>

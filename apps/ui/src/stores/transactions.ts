@@ -1,55 +1,20 @@
 import { create } from 'zustand';
 import type { Transaction, ProcessingStatus } from '~/types';
-import { getAllTransactions, addTransactions, clearTransactions } from '~/lib/db';
+import { getDb, addTransactions, clearTransactions } from '~/lib/db';
 
 interface TransactionState {
-  transactions: Transaction[];
   status: ProcessingStatus;
-  isInitialized: boolean;
 
-  init: () => Promise<void>;
   setStatus: (status: ProcessingStatus) => void;
-  setTransactions: (transactions: Transaction[]) => void;
   addParsedTransactions: (transactions: Transaction[]) => Promise<void>;
   clearAll: () => Promise<void>;
 }
 
-export const useTransactionStore = create<TransactionState>((set, get) => ({
-  transactions: [],
+export const useTransactionStore = create<TransactionState>((set) => ({
   status: { stage: 'idle' },
-  isInitialized: false,
-
-  init: async () => {
-    if (get().isInitialized) return;
-
-    const transactions = await getAllTransactions();
-
-    if (transactions.length > 0) {
-      const sorted = transactions.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      const dateRange = getDateRange(sorted);
-
-      set({
-        transactions: sorted,
-        status: {
-          stage: 'complete',
-          transactionCount: sorted.length,
-          dateRange,
-        },
-        isInitialized: true,
-      });
-    } else {
-      set({ isInitialized: true });
-    }
-  },
 
   setStatus: (status) => {
     set({ status });
-  },
-
-  setTransactions: (transactions) => {
-    set({ transactions });
   },
 
   addParsedTransactions: async (newTransactions) => {
@@ -64,31 +29,24 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       status: { stage: 'parsing', progress: 95, message: 'Saving...' },
     });
 
-    await addTransactions(newTransactions);
+    const db = getDb();
+    await addTransactions(db, newTransactions);
 
-    const existing = get().transactions;
-    const existingIds = new Set(existing.map((t) => t.id));
-    const uniqueNew = newTransactions.filter((t) => !existingIds.has(t.id));
-    const merged = [...existing, ...uniqueNew].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    const dateRange = getDateRange(merged);
+    const dateRange = getDateRange(newTransactions);
 
     set({
-      transactions: merged,
       status: {
         stage: 'complete',
-        transactionCount: merged.length,
+        transactionCount: newTransactions.length,
         dateRange,
       },
     });
   },
 
   clearAll: async () => {
-    await clearTransactions();
+    const db = getDb();
+    await clearTransactions(db);
     set({
-      transactions: [],
       status: { stage: 'idle' },
     });
   },

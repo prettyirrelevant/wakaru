@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Theme } from '~/types';
-import { getSetting, setSetting } from '~/lib/db';
+import { getDb, getSetting, setSetting } from '~/lib/db';
 
 interface SettingsState {
   theme: Theme;
@@ -20,8 +20,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   init: async () => {
     if (get().isInitialized) return;
 
-    const theme = await getSetting<Theme>('theme');
-    const chatEnabled = await getSetting<boolean>('chatEnabled');
+    const db = getDb();
+    const theme = await getSetting<Theme>(db, 'theme');
+    const chatEnabled = await getSetting<boolean>(db, 'chatEnabled');
 
     set({
       theme: theme ?? 'system',
@@ -32,11 +33,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setTheme: (theme) => {
     set({ theme });
-    setSetting('theme', theme);
+    const db = getDb();
+    setSetting(db, 'theme', theme);
   },
 
   setChatEnabled: (chatEnabled) => {
     set({ chatEnabled });
-    setSetting('chatEnabled', chatEnabled);
+    const db = getDb();
+    setSetting(db, 'chatEnabled', chatEnabled);
   },
 }));

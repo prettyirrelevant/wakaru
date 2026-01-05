@@ -257,19 +257,35 @@
 }
 
 .tui-markdown table {
-  @apply w-full my-2 border-collapse;
+  @apply my-2 border-collapse text-[11px] block overflow-x-auto whitespace-nowrap;
+}
+
+.tui-markdown thead {
+  @apply border-b border-border;
 }
 
 .tui-markdown th {
-  @apply text-left py-1 px-2 border-b border-border text-muted-foreground font-medium;
+  @apply text-left py-1.5 px-2 text-muted-foreground font-medium bg-muted/50;
+}
+
+.tui-markdown th:first-child {
+  @apply pl-0;
 }
 
 .tui-markdown td {
-  @apply py-1 px-2 border-b border-border/50;
+  @apply py-1.5 px-2 border-b border-border/30;
+}
+
+.tui-markdown td:first-child {
+  @apply pl-0;
 }
 
 .tui-markdown tr:last-child td {
   @apply border-b-0;
+}
+
+.tui-markdown tbody tr:hover {
+  @apply bg-muted/30;
 }
 
 .tui-markdown code {
