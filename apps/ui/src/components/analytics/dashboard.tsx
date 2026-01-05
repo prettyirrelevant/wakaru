@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useTransactionStore } from '~/stores/transactions';
+import { useState } from 'react';
+import { useLiveQuery } from '@electric-sql/pglite-react';
 import { StatsRow } from './stats-row';
 import { FlowChart } from './flow-chart';
 import { TransactionList } from './transaction-list';
@@ -8,74 +8,79 @@ import { ChatSheet } from '~/components/chat/chat-sheet';
 import { SettingsSheet } from '~/components/settings/settings-sheet';
 import { UploadSheet } from '~/components/upload/upload-sheet';
 
-import type { AnalyticsSummary } from '~/types';
-import { TransactionCategory } from '~/types';
+interface StatsRow {
+  total_inflow: string;
+  total_outflow: string;
+  count: string;
+  min_date: Date | null;
+  max_date: Date | null;
+}
+
+interface MonthlyRow {
+  month: string;
+  inflow: string;
+  outflow: string;
+}
+
+const STATS_QUERY = `
+  SELECT 
+    COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_inflow,
+    COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as total_outflow,
+    COUNT(*) as count,
+    MIN(date) as min_date,
+    MAX(date) as max_date
+  FROM transactions
+`;
+
+function formatDateRange(minDate: Date | null, maxDate: Date | null): string {
+  if (!minDate || !maxDate) return '';
+  
+  const format = (d: Date) =>
+    d.toLocaleDateString('en-NG', { month: 'short', year: 'numeric' });
+  
+  const start = format(minDate);
+  const end = format(maxDate);
+  
+  return start === end ? start : `${start} - ${end}`;
+}
+
+const MONTHLY_QUERY = `
+  SELECT 
+    TO_CHAR(date, 'YYYY-MM') as month,
+    COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as inflow,
+    COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as outflow
+  FROM transactions
+  GROUP BY TO_CHAR(date, 'YYYY-MM')
+  ORDER BY month ASC
+`;
 
 export function Dashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  const transactions = useTransactionStore((s) => s.transactions);
-  const status = useTransactionStore((s) => s.status);
+  const statsResult = useLiveQuery<StatsRow>(STATS_QUERY);
+  const monthlyResult = useLiveQuery<MonthlyRow>(MONTHLY_QUERY);
 
-  const analytics = useMemo((): AnalyticsSummary => {
-    const inflow = transactions
-      .filter((t) => t.category === TransactionCategory.Inflow)
-      .reduce((sum, t) => sum + t.amount, 0);
+  const stats = statsResult?.rows?.[0];
+  const totalInflow = Number(stats?.total_inflow ?? 0);
+  const totalOutflow = Number(stats?.total_outflow ?? 0);
+  const transactionCount = Number(stats?.count ?? 0);
+  const dateRangeText = formatDateRange(stats?.min_date ?? null, stats?.max_date ?? null);
 
-    const outflow = transactions
-      .filter((t) => t.category === TransactionCategory.Outflow)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-    const dates = transactions.map((t) => new Date(t.date).getTime());
-    const dateRange =
-      dates.length > 0
-        ? {
-            start: new Date(Math.min(...dates)).toISOString(),
-            end: new Date(Math.max(...dates)).toISOString(),
-          }
-        : null;
-
-    // Group by month
-    const byMonthMap = new Map<string, { inflow: number; outflow: number }>();
-    transactions.forEach((t) => {
-      const month = t.date.slice(0, 7); // YYYY-MM
-      const existing = byMonthMap.get(month) || { inflow: 0, outflow: 0 };
-      if (t.amount > 0) {
-        existing.inflow += t.amount;
-      } else {
-        existing.outflow += Math.abs(t.amount);
-      }
-      byMonthMap.set(month, existing);
-    });
-
-    const byMonth = Array.from(byMonthMap.entries())
-      .map(([month, data]) => ({ month, ...data }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
-    return {
-      totalInflow: inflow,
-      totalOutflow: outflow,
-      netChange: inflow - outflow,
-      transactionCount: transactions.length,
-      dateRange,
-      byMonth,
-      byCategory: [], // TODO: implement category breakdown
-    };
-  }, [transactions]);
+  const byMonth = (monthlyResult?.rows ?? []).map(row => ({
+    month: row.month,
+    inflow: Number(row.inflow),
+    outflow: Number(row.outflow),
+  }));
 
   const statusText =
-    status.stage === 'complete'
-      ? `${status.transactionCount} transactions`
+    transactionCount > 0
+      ? `${transactionCount} transactions`
       : 'Loading...';
-
-  const dateRangeText =
-    status.stage === 'complete' ? status.dateRange : '';
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-background">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
@@ -98,7 +103,6 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Status Bar */}
         <div className="flex items-center gap-2 border-t border-border px-4 py-2 text-xs text-muted-foreground">
           <span className="tui-badge mono-nums">{statusText}</span>
           {dateRangeText && (
@@ -110,41 +114,33 @@ export function Dashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 space-y-6 px-4 py-6 pb-24">
-        {/* Stats Row */}
         <StatsRow
-          inflow={analytics.totalInflow}
-          outflow={analytics.totalOutflow}
-          net={analytics.netChange}
+          inflow={totalInflow}
+          outflow={totalOutflow}
+          net={totalInflow - totalOutflow}
         />
 
-        {/* Flow Chart */}
-        {analytics.byMonth.length > 0 && (
-          <FlowChart data={analytics.byMonth} />
+        {byMonth.length > 0 && (
+          <FlowChart data={byMonth} />
         )}
 
-        {/* Transactions */}
-        <TransactionList transactions={transactions} disableShortcuts={isChatOpen || isSettingsOpen || isUploadOpen} />
+        <TransactionList disableShortcuts={isChatOpen || isSettingsOpen || isUploadOpen} />
       </main>
 
-      {/* Chat FAB */}
       <ChatFab onClick={() => setIsChatOpen(true)} />
 
-      {/* Chat Sheet */}
       <ChatSheet 
         isOpen={isChatOpen} 
         onClose={() => setIsChatOpen(false)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      {/* Settings Sheet */}
       <SettingsSheet
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      {/* Upload Sheet */}
       <UploadSheet
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}

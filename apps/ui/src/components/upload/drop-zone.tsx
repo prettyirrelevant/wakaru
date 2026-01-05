@@ -112,17 +112,15 @@ export function DropZone({ onFileSelect, onError, disabled, fileFormat }: DropZo
           </div>
 
           {/* Upload icon as ASCII */}
-          <div className="text-center space-y-2">
+          <div className="flex justify-center">
             <pre className={cn(
-              'text-xs leading-tight inline-block text-left',
+              'text-xs leading-tight font-mono',
               isDragging ? 'text-accent' : 'text-muted-foreground'
-            )}>
-{`   ▲
-  ╱│╲
- ╱ │ ╲
-   │
-───┴───`}
-            </pre>
+            )}>{`  ▲
+ ╱│╲
+╱ │ ╲
+  │
+──┴──`}</pre>
           </div>
 
           {/* Text */}

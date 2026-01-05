@@ -26,6 +26,9 @@ export default defineConfig({
   define: {
     __GIT_SHA__: JSON.stringify(gitSha),
   },
+  optimizeDeps: {
+    exclude: ['@electric-sql/pglite'],
+  },
   worker: {
     format: 'es',
   },

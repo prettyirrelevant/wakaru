@@ -49,8 +49,7 @@ pnpm dev
 ## tech stack
 
 - react + typescript
-- sql.js for in-browser queries
-- dexie for local storage
+- pglite (postgres in wasm) for in-browser storage and queries
 - tailwind with a terminal-inspired ui
 
 ## license

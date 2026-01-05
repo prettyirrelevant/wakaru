@@ -5,24 +5,36 @@ import { TransactionCategory, TransactionType } from '~/types';
 import { formatCurrency, formatDateWithYear } from '~/lib/utils';
 import { cn } from '~/lib/utils';
 import { BottomSheet } from '~/components/ui';
+import { useTransactions } from '~/hooks/useTransactions';
+import { FilterPanel } from './filter-panel';
+import { countActiveFilters, isFilterEmpty, formatFilterChips } from '~/lib/filters';
 
 const PAGE_SIZE = 25;
 
-type SortField = 'date' | 'amount';
-type SortOrder = 'asc' | 'desc';
-
 interface TransactionListProps {
-  transactions: Transaction[];
   disableShortcuts?: boolean;
 }
 
-export function TransactionList({ transactions, disableShortcuts = false }: TransactionListProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export function TransactionList({ disableShortcuts = false }: TransactionListProps) {
   const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const [sortField, setSortField] = useState<SortField>('date');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [showFilters, setShowFilters] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    transactions,
+    sortField,
+    sortOrder,
+    searchQuery,
+    setSearchQuery,
+    filters,
+    setFilters,
+    clearFilters,
+    toggleSort,
+  } = useTransactions();
+
+  const activeFilterCount = countActiveFilters(filters);
+  const filterChips = formatFilterChips(filters);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -37,59 +49,28 @@ export function TransactionList({ transactions, disableShortcuts = false }: Tran
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [disableShortcuts]);
 
-  const filteredAndSortedTransactions = useMemo(() => {
-    let result = transactions;
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, sortField, sortOrder, filters]);
 
-    // Filter by search
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = transactions.filter(
-        (t) =>
-          t.description.toLowerCase().includes(query) ||
-          t.meta?.counterpartyName?.toLowerCase().includes(query) ||
-          t.meta?.rawCategory?.toLowerCase().includes(query)
-      );
-    }
-
-    // Sort
-    result = [...result].sort((a, b) => {
-      let comparison = 0;
-      if (sortField === 'date') {
-        comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
-      } else if (sortField === 'amount') {
-        comparison = Math.abs(a.amount) - Math.abs(b.amount);
-      }
-      return sortOrder === 'desc' ? -comparison : comparison;
-    });
-
-    return result;
-  }, [transactions, searchQuery, sortField, sortOrder]);
-
-  const totalPages = Math.ceil(filteredAndSortedTransactions.length / PAGE_SIZE);
+  const totalPages = Math.ceil(transactions.length / PAGE_SIZE);
   const paginatedTransactions = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return filteredAndSortedTransactions.slice(start, start + PAGE_SIZE);
-  }, [filteredAndSortedTransactions, page]);
+    return transactions.slice(start, start + PAGE_SIZE);
+  }, [transactions, page]);
 
-  // Reset page when search or sort changes
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setPage(1);
   };
 
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
+  const handleToggleSort = (field: 'date' | 'amount') => {
+    toggleSort(field);
     setPage(1);
   };
 
   return (
     <div className="space-y-3">
-      {/* Header with sort options */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground text-xs">$</span>
@@ -97,7 +78,7 @@ export function TransactionList({ transactions, disableShortcuts = false }: Tran
         </div>
         <div className="flex items-center gap-1 text-xs">
           <button
-            onClick={() => toggleSort('date')}
+            onClick={() => handleToggleSort('date')}
             className={cn(
               'px-2 py-1 border',
               sortField === 'date'
@@ -108,7 +89,7 @@ export function TransactionList({ transactions, disableShortcuts = false }: Tran
             date {sortField === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
           <button
-            onClick={() => toggleSort('amount')}
+            onClick={() => handleToggleSort('amount')}
             className={cn(
               'px-2 py-1 border',
               sortField === 'amount'
@@ -121,26 +102,67 @@ export function TransactionList({ transactions, disableShortcuts = false }: Tran
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-          /
-        </span>
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="search..."
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="tui-input w-full pl-7 text-xs"
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
+            /
+          </span>
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="uber, spotify, rent..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="tui-input w-full pl-7 text-xs"
+          />
+        </div>
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={cn(
+            'px-3 py-2 border text-xs shrink-0',
+            showFilters || activeFilterCount > 0
+              ? 'bg-accent text-accent-foreground border-accent'
+              : 'border-border hover:border-border-strong'
+          )}
+        >
+          filter{activeFilterCount > 0 && ` (${activeFilterCount})`}
+        </button>
       </div>
 
-      {/* Transaction List */}
+      {showFilters && (
+        <FilterPanel filters={filters} onChange={setFilters} />
+      )}
+
+      {!isFilterEmpty(filters) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {filterChips.map((chip, i) => (
+            <button
+              key={i}
+              onClick={() => setFilters(chip.onRemove())}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20"
+            >
+              {chip.label}
+              <span className="text-accent/70">×</span>
+            </button>
+          ))}
+          <button
+            onClick={clearFilters}
+            className="text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            clear all
+          </button>
+        </div>
+      )}
+
       <div className="tui-box divide-y divide-border">
         {paginatedTransactions.length === 0 ? (
-          <div className="p-6 text-center text-xs text-muted-foreground">
-            {searchQuery ? 'no matches found' : 'no transactions'}
+          <div className="p-8 text-center text-muted-foreground">
+            <p className="text-sm mb-2">¯\_(ツ)_/¯</p>
+            <p className="text-xs">
+              {searchQuery || !isFilterEmpty(filters) 
+                ? 'nothing to see here' 
+                : 'your statement awaits'}
+            </p>
           </div>
         ) : (
           paginatedTransactions.map((transaction) => (
@@ -153,7 +175,6 @@ export function TransactionList({ transactions, disableShortcuts = false }: Tran
         )}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs">
           <button
@@ -176,7 +197,6 @@ export function TransactionList({ transactions, disableShortcuts = false }: Tran
         </div>
       )}
 
-      {/* Transaction Detail Sheet */}
       <TransactionDetailSheet
         transaction={selectedTx}
         onClose={() => setSelectedTx(null)}
@@ -222,8 +242,6 @@ function TransactionRow({ transaction, onClick }: TransactionRowProps) {
   );
 }
 
-
-
 interface TransactionDetailSheetProps {
   transaction: Transaction | null;
   onClose: () => void;
@@ -238,7 +256,6 @@ function TransactionDetailSheet({ transaction, onClose }: TransactionDetailSheet
   return (
     <BottomSheet isOpen={!!transaction} onClose={onClose}>
       <div className="max-h-[85vh] overflow-y-auto px-4 pb-8">
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -258,18 +275,15 @@ function TransactionDetailSheet({ transaction, onClose }: TransactionDetailSheet
           </span>
         </div>
 
-        {/* Date */}
         <div className="mt-4 tui-box p-3">
           <DetailRow label="date" value={formatDateWithYear(transaction.date)} />
           <DetailRow label="time" value={new Date(transaction.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })} />
         </div>
 
-        {/* Description */}
         <div className="mt-3 tui-box p-3">
           <DetailRow label="description" value={transaction.description} />
         </div>
 
-        {/* Counterparty */}
         {(meta?.counterpartyName || meta?.counterpartyAccount || meta?.counterpartyBank) && (
           <div className="mt-3 tui-box p-3">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
@@ -287,7 +301,6 @@ function TransactionDetailSheet({ transaction, onClose }: TransactionDetailSheet
           </div>
         )}
 
-        {/* Bill Details */}
         {meta?.billProvider && (
           <div className="mt-3 tui-box p-3">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
@@ -299,7 +312,6 @@ function TransactionDetailSheet({ transaction, onClose }: TransactionDetailSheet
           </div>
         )}
 
-        {/* Reference */}
         <div className="mt-3 tui-box p-3">
           <DetailRow label="reference" value={transaction.reference} mono />
           {meta?.sessionId && (
@@ -307,7 +319,6 @@ function TransactionDetailSheet({ transaction, onClose }: TransactionDetailSheet
           )}
         </div>
 
-        {/* Raw Category */}
         {meta?.rawCategory && (
           <div className="mt-3">
             <span className="text-xs text-muted-foreground">
