@@ -91,7 +91,7 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <div className="text-[10px] text-muted-foreground mb-1.5">&gt; amount</div>
           <div className="flex items-center gap-1">
@@ -101,7 +101,7 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
               placeholder="min"
               value={filters.amountMin ?? ''}
               onChange={e => setAmountMin(e.target.value)}
-              className="w-full text-xs px-2 py-1.5 bg-background border border-border focus:border-accent focus:outline-none mono-nums"
+              className="w-full text-base px-2 py-1.5 bg-background border border-border focus:border-accent focus:outline-none mono-nums"
             />
             <span className="text-muted-foreground text-[10px]">to</span>
             <input
@@ -110,7 +110,7 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
               placeholder="max"
               value={filters.amountMax ?? ''}
               onChange={e => setAmountMax(e.target.value)}
-              className="w-full text-xs px-2 py-1.5 bg-background border border-border focus:border-accent focus:outline-none mono-nums"
+              className="w-full text-base px-2 py-1.5 bg-background border border-border focus:border-accent focus:outline-none mono-nums"
             />
           </div>
         </div>
