@@ -113,7 +113,7 @@ export function TransactionList({ disableShortcuts = false }: TransactionListPro
             placeholder="uber, spotify, rent..."
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
-            className="tui-input w-full pl-7 text-xs"
+            className="tui-input w-full pl-7 text-base"
           />
         </div>
         <button
