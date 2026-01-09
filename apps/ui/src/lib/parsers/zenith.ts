@@ -52,7 +52,6 @@ export class ZenithParser extends BaseParser {
     const description = row[1]?.toString().trim() || '';
     const debitStr = row[2]?.toString().trim() || '';
     const creditStr = row[3]?.toString().trim() || '';
-    const valueDate = row[4]?.toString().trim() || '';
     const balanceStr = row[5]?.toString().trim() || '';
 
     const date = this.parseDDMMYYYY(dateStr);

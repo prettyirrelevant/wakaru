@@ -1,70 +1,23 @@
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
-import type { UIMessage, ChatTransport, UIMessageChunk } from 'ai';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
+import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import type { UIMessage } from 'ai';
 import { usePGlite } from '@electric-sql/pglite-react';
 import { BottomSheet } from '~/components/ui';
 import { useSettingsStore } from '~/stores/settings';
 import { executeQuery } from '~/lib/db';
-import { LocalServerTransport } from '~/lib/ai/local-server-transport';
 import type { ChatMode } from '~/types';
-
-dayjs.extend(relativeTime);
-
-const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
-
-class BlockedTransport implements ChatTransport<UIMessage> {
-  async sendMessages(): Promise<ReadableStream<UIMessageChunk>> {
-    return new ReadableStream({
-      start(controller) {
-        controller.close();
-      },
-    });
-  }
-
-  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
-    return null;
-  }
-}
+import { ChatBadge } from './chat-badge';
+import { ChatMessage } from './chat-message';
+import { SuggestedQuestions } from './suggested-questions';
+import { BlockedOverlay } from './blocked-overlay';
+import { formatResults, getErrorMessage, getChatKey } from '~/lib/chat/utils';
+import { createChatTransport } from '~/lib/chat/transport';
 
 interface ChatSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenSettings: () => void;
-}
-
-function ChatBadge({ mode }: { mode: ChatMode }) {
-  if (mode.type === 'off') {
-    return <span className="tui-badge text-xs">off</span>;
-  }
-
-  if (mode.type === 'cloud') {
-    return <span className="tui-badge tui-badge-success text-xs">cloud ●</span>;
-  }
-
-  if (mode.type === 'local') {
-    if (mode.status === 'connected') {
-      return <span className="tui-badge tui-badge-success text-xs">local ●</span>;
-    }
-    if (mode.status === 'testing') {
-      return <span className="tui-badge tui-badge-warning text-xs">local ◐</span>;
-    }
-    return <span className="tui-badge text-xs">local ○</span>;
-  }
-
-  return null;
-}
-
-function getChatKey(chatMode: ChatMode): string {
-  if (chatMode.type === 'cloud') return 'cloud';
-  if (chatMode.type === 'local' && chatMode.status === 'connected') {
-    return `local-${chatMode.url}-${chatMode.model}`;
-  }
-  return 'blocked';
 }
 
 export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
@@ -107,40 +60,6 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
   const isLocalBlocked =
     chatMode.type === 'local' && chatMode.status !== 'connected';
 
-  const formatValue = (col: string, value: unknown): string => {
-    if (value === null || value === undefined) return 'none';
-
-    const colLower = col.toLowerCase();
-    const isMonetary = colLower.includes('amount') || colLower.includes('total') || colLower.includes('sum');
-
-    if (isMonetary && typeof value === 'number') {
-      return `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-    }
-
-    if (colLower.includes('date') && typeof value === 'string') {
-      const date = new Date(value);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      }
-    }
-
-    return String(value);
-  };
-
-  const formatResults = (columns: string[], rows: unknown[][]): string => {
-    if (rows.length === 0) return 'No results found';
-
-    const lines = rows.slice(0, 20).map((row) => {
-      return columns.map((col, i) => `${col}: ${formatValue(col, row[i])}`).join(', ');
-    });
-
-    if (rows.length > 20) {
-      lines.push(`... and ${rows.length - 20} more rows`);
-    }
-
-    return lines.join('\n');
-  };
-
   const executeLocalQuery = async (sql: string): Promise<string> => {
     try {
       const { columns, rows } = await executeQuery(db, sql);
@@ -150,15 +69,10 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
     }
   };
 
-  const transport = useMemo(() => {
-    if (chatMode.type === 'cloud') {
-      return new DefaultChatTransport<UIMessage>({ api: `${PROXY_URL}/api/chat` });
-    }
-    if (chatMode.type === 'local' && chatMode.status === 'connected') {
-      return new LocalServerTransport(chatMode.url, chatMode.model, executeLocalQuery);
-    }
-    return new BlockedTransport();
-  }, [chatMode, db]);
+  const transport = useMemo(
+    () => createChatTransport(chatMode, executeLocalQuery),
+    [chatMode, db]
+  );
 
   const [input, setInput] = useState('');
 
@@ -222,73 +136,7 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
     setInput('');
   };
 
-  const getErrorMessage = (): string | null => {
-    if (!error) return null;
-
-    const errorStr = error.message || String(error);
-
-    if (errorStr.includes('rate_limit') || errorStr.includes('429')) {
-      return "I'm getting a lot of requests right now! Please try again in a minute or two.";
-    }
-
-    if (errorStr.includes('service_unavailable') || errorStr.includes('503')) {
-      return "I'm having trouble connecting right now. Please try again in a moment.";
-    }
-
-    if (errorStr.includes('Failed to fetch') || errorStr.includes('NetworkError')) {
-      return chatMode.type === 'local'
-        ? "Can't connect to your local server. Make sure it's running."
-        : 'Connection failed. Check your internet connection.';
-    }
-
-    return 'Something went wrong. Please try again.';
-  };
-
-  const suggestedQuestions = [
-    'total spending?',
-    'who did I send money to most?',
-    'biggest expense?',
-    'spending by month?',
-  ];
-
-  const errorMessage = getErrorMessage();
-
-  const renderBlockedOverlay = () => {
-    if (!isLocalBlocked) return null;
-
-    const statusText = chatMode.type === 'local' && chatMode.status === 'error'
-      ? 'local server unreachable'
-      : 'local server not configured';
-
-    const errorText = chatMode.type === 'local' ? chatMode.error : null;
-
-    return (
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
-        <div className="tui-box p-6 text-center space-y-4 max-w-xs">
-          <p className="text-sm">{statusText}</p>
-
-          {errorText && (
-            <p className="text-xs text-muted-foreground">{errorText}</p>
-          )}
-
-          <div className="flex gap-2 justify-center">
-            <button
-              onClick={handleOpenSettings}
-              className="tui-btn-primary text-xs px-3 py-1.5"
-            >
-              [ open settings ]
-            </button>
-            <button
-              onClick={() => setChatMode('cloud')}
-              className="tui-btn-ghost text-xs px-3 py-1.5"
-            >
-              [ use cloud ]
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const errorMessage = getErrorMessage(error, chatMode);
 
   return (
     <div className="relative flex h-[70vh] flex-col overflow-hidden">
@@ -320,23 +168,13 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
               )}
 
               {canChat && (
-                <div className="flex flex-wrap gap-1.5 justify-center">
-                  {suggestedQuestions.map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => setInput(q)}
-                      className="tui-btn-ghost text-xs px-2 py-1"
-                    >
-                      [{q}]
-                    </button>
-                  ))}
-                </div>
+                <SuggestedQuestions onSelect={setInput} />
               )}
             </div>
           ) : (
             <>
               {messages.map((message, index) => (
-                <MessageBubble
+                <ChatMessage
                   key={message.id}
                   message={message}
                   createdAt={messageTimestamps.current.get(message.id)}
@@ -400,65 +238,13 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
           </div>
         </form>
 
-        {renderBlockedOverlay()}
-    </div>
-  );
-}
-
-interface MessageBubbleProps {
-  message: {
-    id: string;
-    role: string;
-    parts?: Array<{ type: string; text?: string }>;
-  };
-  createdAt?: Date;
-  isStreaming?: boolean;
-}
-
-function MessageBubble({ message, createdAt, isStreaming = false }: MessageBubbleProps) {
-  const [copied, setCopied] = useState(false);
-
-  const content = message.parts
-    ?.filter((p) => p.type === 'text')
-    .map((p) => p.text)
-    .join('') || '';
-
-  if (!content) return null;
-
-  const timeLabel = createdAt ? dayjs(createdAt).fromNow() : '';
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <div className={`group flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-      <div
-        className={`max-w-[85%] text-xs px-3 py-2 ${
-          message.role === 'user' ? 'tui-box-accent' : 'tui-box'
-        }`}
-      >
-        {message.role === 'assistant' && (
-          <span className="text-muted-foreground mr-1">&gt;</span>
+        {isLocalBlocked && (
+          <BlockedOverlay
+            chatMode={chatMode}
+            onOpenSettings={handleOpenSettings}
+            onUseCloud={() => setChatMode('cloud')}
+          />
         )}
-        <span className="tui-markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: 'span' }}>{content}</ReactMarkdown>
-        </span>
-        {isStreaming && <span className="cursor-blink ml-0.5"></span>}
-      </div>
-      {content && (
-        <div className="flex items-center gap-2 mt-1 opacity-40 group-hover:opacity-100 transition-opacity">
-          {timeLabel && <span className="text-muted-foreground text-[10px]">{timeLabel}</span>}
-          <button
-            onClick={handleCopy}
-            className="text-muted-foreground hover:text-foreground transition-colors text-[10px]"
-          >
-            {copied ? '[copied]' : '[copy]'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

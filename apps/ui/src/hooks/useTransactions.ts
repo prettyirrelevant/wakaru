@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from '@electric-sql/pglite-react';
 import type { Transaction, TransactionMeta } from '~/types';
-import { type FilterState, type WhereClauseResult, emptyFilterState, buildWhereClause } from '~/lib/filters';
+import { type FilterState, emptyFilterState, buildWhereClause } from '~/lib/filters';
 
 export type SortField = 'date' | 'amount';
 export type SortOrder = 'asc' | 'desc';
