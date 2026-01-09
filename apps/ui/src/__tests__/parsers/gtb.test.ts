@@ -7,11 +7,11 @@ describe('GtbParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 7 columns', () => {
-      expect(parser.parseTransaction(['01-Jan-2025', '01-Jan-2025', 'REF123'], 0)).toBeNull();
+      expect(parser.parseTransaction(['01-Jan-2025', '01-Jan-2025', 'REF123'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -26,7 +26,7 @@ describe('GtbParser', () => {
         'NIP TRANSFER TO OPAY - JOHN DOE',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.GTB);
@@ -46,7 +46,7 @@ describe('GtbParser', () => {
         'NIP TRANSFER TO KUDA - JANE SMITH',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000); // -25,000 * 100 kobo
@@ -64,7 +64,7 @@ describe('GtbParser', () => {
         'Airtime purchase-08012345678',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -81,7 +81,7 @@ describe('GtbParser', () => {
         'Electronic Money Transfer Levy',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -98,7 +98,7 @@ describe('GtbParser', () => {
         'SMS ALERT CHARGES',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -115,7 +115,7 @@ describe('GtbParser', () => {
         'POSWEB PURCHASE-12345-SHOP-CHICKEN REPUBLIC',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -132,7 +132,7 @@ describe('GtbParser', () => {
         'ATM CASH WITHDRAWAL',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -149,7 +149,7 @@ describe('GtbParser', () => {
         'Reversal of failed transaction',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -166,7 +166,7 @@ describe('GtbParser', () => {
         'INTEREST CREDIT',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Interest);
@@ -183,7 +183,7 @@ describe('GtbParser', () => {
         'NIP TRANSFER TO OPAY - JOHN DOE',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result!.meta?.counterpartyBank).toBe('OPay');
       expect(result!.meta?.counterpartyName).toBe('JOHN DOE');
@@ -200,7 +200,7 @@ describe('GtbParser', () => {
         'TRANSFER FROM PALMPAY - JANE SMITH',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result!.meta?.counterpartyBank).toBe('PalmPay');
       expect(result!.meta?.counterpartyName).toBe('JANE SMITH');
@@ -217,7 +217,7 @@ describe('GtbParser', () => {
         'Some remarks',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -232,7 +232,7 @@ describe('GtbParser', () => {
         'Some remarks',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -250,7 +250,7 @@ describe('GtbParser', () => {
           'Test transaction',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result).not.toBeNull();
 
         const date = new Date(result!.date);
@@ -269,7 +269,7 @@ describe('GtbParser', () => {
         'Test',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000); // 101,000 * 100
     });
 
@@ -284,7 +284,7 @@ describe('GtbParser', () => {
         'Test',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.sessionId).toBe('16-Nov-2025');
     });
 
@@ -308,8 +308,8 @@ describe('GtbParser', () => {
         'Transaction 2',
       ];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^gtb-/);

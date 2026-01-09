@@ -7,11 +7,11 @@ describe('OPayParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 5 columns', () => {
-      expect(parser.parseTransaction(['29 Nov 2025 08:12:51', '29 Nov 2025', 'Test'], 0)).toBeNull();
+      expect(parser.parseTransaction(['29 Nov 2025 08:12:51', '29 Nov 2025', 'Test'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -27,7 +27,7 @@ describe('OPayParser', () => {
         'REF123456',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.OPay);
@@ -52,7 +52,7 @@ describe('OPayParser', () => {
         'REF789012',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000); // -25,000 * 100 kobo (negative for debit)
@@ -72,7 +72,7 @@ describe('OPayParser', () => {
         'AIR123',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-100000); // -1,000 * 100 kobo
@@ -92,7 +92,7 @@ describe('OPayParser', () => {
         'MER456',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BillPayment);
@@ -111,7 +111,7 @@ describe('OPayParser', () => {
         'LEVY001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -129,7 +129,7 @@ describe('OPayParser', () => {
         'REV001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -147,7 +147,7 @@ describe('OPayParser', () => {
         'OW001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -163,7 +163,7 @@ describe('OPayParser', () => {
         'AS001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -179,7 +179,7 @@ describe('OPayParser', () => {
         'REF001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -195,7 +195,7 @@ describe('OPayParser', () => {
         'REF001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -211,7 +211,7 @@ describe('OPayParser', () => {
         'REF001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(1000000); // 10,000 * 100 kobo
     });
@@ -238,8 +238,8 @@ describe('OPayParser', () => {
         'REF002',
       ];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
     });
@@ -256,7 +256,7 @@ describe('OPayParser', () => {
         '', // Empty reference
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).not.toBeNull();
       expect(result!.reference).toBeTruthy();
       expect(result!.reference.length).toBeGreaterThan(0);
@@ -277,7 +277,7 @@ describe('OPayParser', () => {
           'REF001',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result).not.toBeNull();
 
         const date = new Date(result!.date);
@@ -307,8 +307,8 @@ describe('OPayParser', () => {
         'REF002',
       ];
 
-      const creditResult = parser.parseTransaction(creditRow, 0);
-      const debitResult = parser.parseTransaction(debitRow, 1);
+      const creditResult = parser.parseTransaction(creditRow);
+      const debitResult = parser.parseTransaction(debitRow);
 
       expect(creditResult!.category).toBe(TransactionCategory.Inflow);
       expect(debitResult!.category).toBe(TransactionCategory.Outflow);

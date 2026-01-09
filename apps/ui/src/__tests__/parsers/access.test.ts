@@ -7,11 +7,11 @@ describe('AccessParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 6 columns', () => {
-      expect(parser.parseTransaction(['01-JAN-25', '01-JAN-25', 'Test'], 0)).toBeNull();
+      expect(parser.parseTransaction(['01-JAN-25', '01-JAN-25', 'Test'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -25,7 +25,7 @@ describe('AccessParser', () => {
         '150,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.Access);
@@ -45,7 +45,7 @@ describe('AccessParser', () => {
         '125,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -64,7 +64,7 @@ describe('AccessParser', () => {
         '115,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.counterpartyBank).toBe('OPay');
@@ -80,7 +80,7 @@ describe('AccessParser', () => {
         '110,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -96,7 +96,7 @@ describe('AccessParser', () => {
         '95,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -112,7 +112,7 @@ describe('AccessParser', () => {
         '75,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -128,7 +128,7 @@ describe('AccessParser', () => {
         '67,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BillPayment);
@@ -144,7 +144,7 @@ describe('AccessParser', () => {
         '66,950.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -160,7 +160,7 @@ describe('AccessParser', () => {
         '66,946.25',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -176,7 +176,7 @@ describe('AccessParser', () => {
         '66,846.25',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -192,7 +192,7 @@ describe('AccessParser', () => {
         '71,846.25',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -208,7 +208,7 @@ describe('AccessParser', () => {
         '81,846.25',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -225,7 +225,7 @@ describe('AccessParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -239,7 +239,7 @@ describe('AccessParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -256,7 +256,7 @@ describe('AccessParser', () => {
           '100,000.00',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result).not.toBeNull();
 
         const date = new Date(result!.date);
@@ -274,7 +274,7 @@ describe('AccessParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
@@ -288,7 +288,7 @@ describe('AccessParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.sessionId).toBe('02-JAN-25');
     });
 
@@ -296,8 +296,8 @@ describe('AccessParser', () => {
       const row1 = ['01-JAN-25', '01-JAN-25', 'Transaction 1', '-', '1,000.00', '100,000.00'];
       const row2 = ['01-JAN-25', '01-JAN-25', 'Transaction 2', '-', '2,000.00', '102,000.00'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^access-/);
@@ -324,7 +324,7 @@ describe('AccessParser', () => {
           '99,000.00',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result!.meta?.counterpartyBank).toBe(expected);
       });
     });

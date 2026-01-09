@@ -7,11 +7,11 @@ describe('StandardCharteredParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 5 columns', () => {
-      expect(parser.parseTransaction(['15 Nov 2025', 'Test', '1000', '50000'], 0)).toBeNull();
+      expect(parser.parseTransaction(['15 Nov 2025', 'Test', '1000', '50000'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -24,7 +24,7 @@ describe('StandardCharteredParser', () => {
         'credit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.StandardChartered);
@@ -41,7 +41,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -57,7 +57,7 @@ describe('StandardCharteredParser', () => {
         'credit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -73,7 +73,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -88,7 +88,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -103,7 +103,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -118,7 +118,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -133,7 +133,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -148,7 +148,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -163,7 +163,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -178,7 +178,7 @@ describe('StandardCharteredParser', () => {
         'credit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Interest);
@@ -193,7 +193,7 @@ describe('StandardCharteredParser', () => {
         'debit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -208,7 +208,7 @@ describe('StandardCharteredParser', () => {
         'credit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -221,7 +221,7 @@ describe('StandardCharteredParser', () => {
         'credit',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
@@ -237,7 +237,7 @@ describe('StandardCharteredParser', () => {
           'credit',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result).not.toBeNull();
 
         const date = new Date(result!.date);
@@ -249,8 +249,8 @@ describe('StandardCharteredParser', () => {
       const row1 = ['01 Jan 2025', 'Transaction 1', '1,000.00', '100,000.00', 'credit'];
       const row2 = ['01 Jan 2025', 'Transaction 2', '2,000.00', '102,000.00', 'credit'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^sc-/);

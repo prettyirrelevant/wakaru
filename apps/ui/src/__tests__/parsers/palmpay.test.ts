@@ -7,11 +7,11 @@ describe('PalmPayParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 3 columns', () => {
-      expect(parser.parseTransaction(['12/29/2025 06:19:00 AM Test', '+1000'], 0)).toBeNull();
+      expect(parser.parseTransaction(['12/29/2025 06:19:00 AM Test', '+1000'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -22,7 +22,7 @@ describe('PalmPayParser', () => {
         'TX123456',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.PalmPay);
@@ -38,7 +38,7 @@ describe('PalmPayParser', () => {
         'TX789012',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -52,7 +52,7 @@ describe('PalmPayParser', () => {
         'TX001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -66,7 +66,7 @@ describe('PalmPayParser', () => {
         'TX002',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -80,7 +80,7 @@ describe('PalmPayParser', () => {
         'INT001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Interest);
@@ -93,7 +93,7 @@ describe('PalmPayParser', () => {
         'AIR001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -106,7 +106,7 @@ describe('PalmPayParser', () => {
         'BILL001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BillPayment);
@@ -119,7 +119,7 @@ describe('PalmPayParser', () => {
         'CHG001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -132,7 +132,7 @@ describe('PalmPayParser', () => {
         'LEV001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -145,7 +145,7 @@ describe('PalmPayParser', () => {
         'REV001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -158,7 +158,7 @@ describe('PalmPayParser', () => {
         'POS001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -171,7 +171,7 @@ describe('PalmPayParser', () => {
         'WD001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -184,7 +184,7 @@ describe('PalmPayParser', () => {
         'TX001',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -194,10 +194,10 @@ describe('PalmPayParser', () => {
       const row12AM = ['12/29/2025 12:30:00 AM Test', '+1,000.00', 'TX003'];
       const row12PM = ['12/29/2025 12:30:00 PM Test', '+1,000.00', 'TX004'];
 
-      const resultAM = parser.parseTransaction(rowAM, 0);
-      const resultPM = parser.parseTransaction(rowPM, 1);
-      const result12AM = parser.parseTransaction(row12AM, 2);
-      const result12PM = parser.parseTransaction(row12PM, 3);
+      const resultAM = parser.parseTransaction(rowAM);
+      const resultPM = parser.parseTransaction(rowPM);
+      const result12AM = parser.parseTransaction(row12AM);
+      const result12PM = parser.parseTransaction(row12PM);
 
       expect(resultAM).not.toBeNull();
       expect(resultPM).not.toBeNull();
@@ -219,8 +219,8 @@ describe('PalmPayParser', () => {
       const row1 = ['12/29/2025 06:19:00 AM Transaction 1', '+1,000.00', 'TX001'];
       const row2 = ['12/29/2025 06:19:01 AM Transaction 2', '+2,000.00', 'TX002'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^palmpay-/);
@@ -229,7 +229,7 @@ describe('PalmPayParser', () => {
     it('generates reference when not provided', () => {
       const row = ['12/29/2025 06:19:00 AM Test', '+1,000.00', ''];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).not.toBeNull();
       expect(result!.reference).toBeTruthy();
     });
@@ -244,7 +244,7 @@ describe('PalmPayParser', () => {
         'TX123',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(5000000);

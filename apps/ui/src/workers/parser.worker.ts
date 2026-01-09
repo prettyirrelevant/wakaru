@@ -75,8 +75,7 @@ const parserApi = {
         const chunk = rows.slice(i, i + CHUNK_SIZE);
 
         for (let j = 0; j < chunk.length; j++) {
-          const rowIndex = i + j;
-          const transaction = parser.parseTransaction(chunk[j], rowIndex);
+          const transaction = parser.parseTransaction(chunk[j]);
 
           if (transaction) {
             transactions.push(transaction);

@@ -7,11 +7,11 @@ describe('SterlingParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 6 columns', () => {
-      expect(parser.parseTransaction(['01-01-2025', 'REF123', 'Test'], 0)).toBeNull();
+      expect(parser.parseTransaction(['01-01-2025', 'REF123', 'Test'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -25,7 +25,7 @@ describe('SterlingParser', () => {
         '150,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.Sterling);
@@ -43,7 +43,7 @@ describe('SterlingParser', () => {
         '125,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -60,7 +60,7 @@ describe('SterlingParser', () => {
         '110,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -78,7 +78,7 @@ describe('SterlingParser', () => {
         '120,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -95,7 +95,7 @@ describe('SterlingParser', () => {
         '115,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -111,7 +111,7 @@ describe('SterlingParser', () => {
         '114,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -127,7 +127,7 @@ describe('SterlingParser', () => {
         '112,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -143,7 +143,7 @@ describe('SterlingParser', () => {
         '97,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -159,7 +159,7 @@ describe('SterlingParser', () => {
         '92,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -175,7 +175,7 @@ describe('SterlingParser', () => {
         '84,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BillPayment);
@@ -191,7 +191,7 @@ describe('SterlingParser', () => {
         '83,900.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -207,7 +207,7 @@ describe('SterlingParser', () => {
         '83,850.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -223,7 +223,7 @@ describe('SterlingParser', () => {
         '83,800.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -239,7 +239,7 @@ describe('SterlingParser', () => {
         '73,800.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -255,7 +255,7 @@ describe('SterlingParser', () => {
         '78,800.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -271,7 +271,7 @@ describe('SterlingParser', () => {
         '78,950.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Interest);
@@ -287,7 +287,7 @@ describe('SterlingParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -301,7 +301,7 @@ describe('SterlingParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -315,7 +315,7 @@ describe('SterlingParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
@@ -329,7 +329,7 @@ describe('SterlingParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.sessionId).toBe('1234567890');
     });
 
@@ -337,8 +337,8 @@ describe('SterlingParser', () => {
       const row1 = ['01-01-2025', 'REF001', 'Transaction 1', '1,000.00', '-', '100,000.00'];
       const row2 = ['01-01-2025', 'REF002', 'Transaction 2', '2,000.00', '-', '102,000.00'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^sterling-/);

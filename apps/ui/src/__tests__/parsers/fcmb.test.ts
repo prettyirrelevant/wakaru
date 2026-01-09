@@ -7,11 +7,11 @@ describe('FcmbParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 6 columns', () => {
-      expect(parser.parseTransaction(['01-Jan-2025', '01-Jan-2025', 'Test'], 0)).toBeNull();
+      expect(parser.parseTransaction(['01-Jan-2025', '01-Jan-2025', 'Test'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -25,7 +25,7 @@ describe('FcmbParser', () => {
         '150,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.FCMB);
@@ -44,7 +44,7 @@ describe('FcmbParser', () => {
         '125,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -61,7 +61,7 @@ describe('FcmbParser', () => {
         '90,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -78,7 +78,7 @@ describe('FcmbParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -95,7 +95,7 @@ describe('FcmbParser', () => {
         '105,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -112,7 +112,7 @@ describe('FcmbParser', () => {
         '95,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -128,7 +128,7 @@ describe('FcmbParser', () => {
         '94,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -144,7 +144,7 @@ describe('FcmbParser', () => {
         '93,950.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -160,7 +160,7 @@ describe('FcmbParser', () => {
         '93,850.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -176,7 +176,7 @@ describe('FcmbParser', () => {
         '93,825.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -192,7 +192,7 @@ describe('FcmbParser', () => {
         '98,825.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -208,7 +208,7 @@ describe('FcmbParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -222,7 +222,7 @@ describe('FcmbParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -236,7 +236,7 @@ describe('FcmbParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
@@ -250,7 +250,7 @@ describe('FcmbParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.sessionId).toBe('02-Jan-2025');
     });
 
@@ -267,7 +267,7 @@ describe('FcmbParser', () => {
           '100,000.00',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result).not.toBeNull();
 
         const date = new Date(result!.date);
@@ -279,8 +279,8 @@ describe('FcmbParser', () => {
       const row1 = ['01-Jan-2025', '01-Jan-2025', 'Transaction 1', '', '1,000.00', '100,000.00'];
       const row2 = ['01-Jan-2025', '01-Jan-2025', 'Transaction 2', '', '2,000.00', '102,000.00'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^fcmb-/);

@@ -7,11 +7,11 @@ describe('UbaParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 6 columns', () => {
-      expect(parser.parseTransaction(['01-Jan-2025', '01-Jan-2025', 'Test'], 0)).toBeNull();
+      expect(parser.parseTransaction(['01-Jan-2025', '01-Jan-2025', 'Test'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -25,7 +25,7 @@ describe('UbaParser', () => {
         '150,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.UBA);
@@ -43,7 +43,7 @@ describe('UbaParser', () => {
         '125,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -60,7 +60,7 @@ describe('UbaParser', () => {
         '110,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -78,7 +78,7 @@ describe('UbaParser', () => {
         '115,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -95,7 +95,7 @@ describe('UbaParser', () => {
         '105,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -113,7 +113,7 @@ describe('UbaParser', () => {
         '115,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -130,7 +130,7 @@ describe('UbaParser', () => {
         '110,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -147,7 +147,7 @@ describe('UbaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -163,7 +163,7 @@ describe('UbaParser', () => {
         '80,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -179,7 +179,7 @@ describe('UbaParser', () => {
         '79,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -195,7 +195,7 @@ describe('UbaParser', () => {
         '78,500.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -211,7 +211,7 @@ describe('UbaParser', () => {
         '78,450.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -227,7 +227,7 @@ describe('UbaParser', () => {
         '78,350.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -243,7 +243,7 @@ describe('UbaParser', () => {
         '77,850.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -259,7 +259,7 @@ describe('UbaParser', () => {
         '78,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Interest);
@@ -275,7 +275,7 @@ describe('UbaParser', () => {
         '83,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -291,7 +291,7 @@ describe('UbaParser', () => {
         '73,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BillPayment);
@@ -307,7 +307,7 @@ describe('UbaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -321,7 +321,7 @@ describe('UbaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -335,7 +335,7 @@ describe('UbaParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
@@ -349,7 +349,7 @@ describe('UbaParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.sessionId).toBe('02-Jan-2025');
     });
 
@@ -366,7 +366,7 @@ describe('UbaParser', () => {
           '100,000.00',
         ];
 
-        const result = parser.parseTransaction(row, 0);
+        const result = parser.parseTransaction(row);
         expect(result).not.toBeNull();
 
         const date = new Date(result!.date);
@@ -378,8 +378,8 @@ describe('UbaParser', () => {
       const row1 = ['01-Jan-2025', '01-Jan-2025', 'Transaction 1', '', '1,000.00', '100,000.00'];
       const row2 = ['01-Jan-2025', '01-Jan-2025', 'Transaction 2', '', '2,000.00', '102,000.00'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^uba-/);

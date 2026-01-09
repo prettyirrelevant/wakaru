@@ -7,11 +7,11 @@ describe('KudaParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 6 columns', () => {
-      expect(parser.parseTransaction(['22/01/23 12:46:35', '', '1000'], 0)).toBeNull();
+      expect(parser.parseTransaction(['22/01/23 12:46:35', '', '1000'])).toBeNull();
     });
 
     it('parses a valid credit transaction (money in)', () => {
@@ -32,7 +32,7 @@ describe('KudaParser', () => {
         '150,000.00',        // 12: balance
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.Kuda);
@@ -60,7 +60,7 @@ describe('KudaParser', () => {
         '125,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000); // -25,000 * 100 kobo (negative for debit)
@@ -84,7 +84,7 @@ describe('KudaParser', () => {
         '124,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -107,7 +107,7 @@ describe('KudaParser', () => {
         '109,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BillPayment);
@@ -130,7 +130,7 @@ describe('KudaParser', () => {
         '104,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -153,7 +153,7 @@ describe('KudaParser', () => {
         '84,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -176,7 +176,7 @@ describe('KudaParser', () => {
         '83,950.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -199,7 +199,7 @@ describe('KudaParser', () => {
         '88,950.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -222,7 +222,7 @@ describe('KudaParser', () => {
         '89,050.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Interest);
@@ -245,7 +245,7 @@ describe('KudaParser', () => {
         '79,050.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -268,7 +268,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -289,7 +289,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -310,7 +310,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -331,7 +331,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result!.meta?.counterpartyName).toBe('Olayinka Jubril Ganiyu');
       expect(result!.meta?.counterpartyAccount).toBe('2211391117');
@@ -355,7 +355,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result!.meta?.counterpartyName).toBe('John Doe');
       expect(result!.meta?.counterpartyAccount).toBeUndefined();
@@ -379,7 +379,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.rawCategory).toBe('Custom Category');
     });
 
@@ -400,7 +400,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.description).toBe('Airtime Purchase');
     });
 
@@ -436,8 +436,8 @@ describe('KudaParser', () => {
         '102,000.00',
       ];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^kuda-/);
@@ -461,7 +461,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(1000000); // 10,000 * 100 kobo
     });
@@ -483,7 +483,7 @@ describe('KudaParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).not.toBeNull();
 
       const date = new Date(result!.date);

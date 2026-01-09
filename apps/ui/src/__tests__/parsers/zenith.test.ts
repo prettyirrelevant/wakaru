@@ -7,11 +7,11 @@ describe('ZenithParser', () => {
 
   describe('parseTransaction', () => {
     it('returns null for empty row', () => {
-      expect(parser.parseTransaction([], 0)).toBeNull();
+      expect(parser.parseTransaction([])).toBeNull();
     });
 
     it('returns null for row with less than 4 columns', () => {
-      expect(parser.parseTransaction(['01/01/2025', 'Test', '1000'], 0)).toBeNull();
+      expect(parser.parseTransaction(['01/01/2025', 'Test', '1000'])).toBeNull();
     });
 
     it('parses a valid credit transaction', () => {
@@ -25,7 +25,7 @@ describe('ZenithParser', () => {
         '150,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.bankSource).toBe(BankType.Zenith);
@@ -46,7 +46,7 @@ describe('ZenithParser', () => {
         '125,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.amount).toBe(-2500000);
@@ -65,7 +65,7 @@ describe('ZenithParser', () => {
         '120,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.CardPayment);
@@ -81,7 +81,7 @@ describe('ZenithParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -97,7 +97,7 @@ describe('ZenithParser', () => {
         '90,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.AtmWithdrawal);
@@ -113,7 +113,7 @@ describe('ZenithParser', () => {
         '89,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Airtime);
@@ -130,7 +130,7 @@ describe('ZenithParser', () => {
         '88,947.50',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -146,7 +146,7 @@ describe('ZenithParser', () => {
         '88,847.50',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.BankCharge);
@@ -162,7 +162,7 @@ describe('ZenithParser', () => {
         '93,847.50',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Reversal);
@@ -178,7 +178,7 @@ describe('ZenithParser', () => {
         '193,847.50',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -194,7 +194,7 @@ describe('ZenithParser', () => {
         '203,847.50',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.type).toBe(TransactionType.Transfer);
@@ -211,7 +211,7 @@ describe('ZenithParser', () => {
         '218,847.50',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
 
       expect(result).not.toBeNull();
       expect(result!.meta?.counterpartyName).toBe('ACME Corp');
@@ -227,7 +227,7 @@ describe('ZenithParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -241,7 +241,7 @@ describe('ZenithParser', () => {
         '100,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result).toBeNull();
     });
 
@@ -255,7 +255,7 @@ describe('ZenithParser', () => {
         '101,000.00',
       ];
 
-      const result = parser.parseTransaction(row, 0);
+      const result = parser.parseTransaction(row);
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
@@ -263,8 +263,8 @@ describe('ZenithParser', () => {
       const row1 = ['01/01/2025', 'Transaction 1', '0.00', '1,000.00', '01/01/2025', '100,000.00'];
       const row2 = ['01/01/2025', 'Transaction 2', '0.00', '2,000.00', '01/01/2025', '102,000.00'];
 
-      const result1 = parser.parseTransaction(row1, 0);
-      const result2 = parser.parseTransaction(row2, 1);
+      const result1 = parser.parseTransaction(row1);
+      const result2 = parser.parseTransaction(row2);
 
       expect(result1!.id).not.toBe(result2!.id);
       expect(result1!.id).toMatch(/^zenith-/);
