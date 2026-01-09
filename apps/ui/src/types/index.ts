@@ -101,6 +101,23 @@ export interface BankParser {
 
 export type Theme = 'light' | 'dark' | 'system';
 
+export type ChatModeType = 'off' | 'cloud' | 'local';
+export type LocalServerStatus = 'idle' | 'testing' | 'connected' | 'error';
+
+export type ChatMode =
+  | { type: 'off' }
+  | { type: 'cloud' }
+  | {
+      type: 'local';
+      status: LocalServerStatus;
+      url: string;
+      model: string;
+      models: string[];
+      error: string | null;
+    };
+
+export type LocalChatMode = Extract<ChatMode, { type: 'local' }>;
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';

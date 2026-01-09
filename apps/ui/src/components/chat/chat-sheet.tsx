@@ -1,19 +1,35 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import type { UIMessage, ChatTransport, UIMessageChunk } from 'ai';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { usePGlite } from '@electric-sql/pglite-react';
 import { BottomSheet } from '~/components/ui';
 import { useSettingsStore } from '~/stores/settings';
 import { executeQuery } from '~/lib/db';
+import { LocalServerTransport } from '~/lib/ai/local-server-transport';
+import type { ChatMode } from '~/types';
 
 dayjs.extend(relativeTime);
 
 const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
-const chatTransport = new DefaultChatTransport({ api: `${PROXY_URL}/api/chat` });
+
+class BlockedTransport implements ChatTransport<UIMessage> {
+  async sendMessages(): Promise<ReadableStream<UIMessageChunk>> {
+    return new ReadableStream({
+      start(controller) {
+        controller.close();
+      },
+    });
+  }
+
+  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+    return null;
+  }
+}
 
 interface ChatSheetProps {
   isOpen: boolean;
@@ -21,47 +37,128 @@ interface ChatSheetProps {
   onOpenSettings: () => void;
 }
 
+function ChatBadge({ mode }: { mode: ChatMode }) {
+  if (mode.type === 'off') {
+    return <span className="tui-badge text-xs">off</span>;
+  }
+
+  if (mode.type === 'cloud') {
+    return <span className="tui-badge tui-badge-success text-xs">cloud ●</span>;
+  }
+
+  if (mode.type === 'local') {
+    if (mode.status === 'connected') {
+      return <span className="tui-badge tui-badge-success text-xs">local ●</span>;
+    }
+    if (mode.status === 'testing') {
+      return <span className="tui-badge tui-badge-warning text-xs">local ◐</span>;
+    }
+    return <span className="tui-badge text-xs">local ○</span>;
+  }
+
+  return null;
+}
+
+function getChatKey(chatMode: ChatMode): string {
+  if (chatMode.type === 'cloud') return 'cloud';
+  if (chatMode.type === 'local' && chatMode.status === 'connected') {
+    return `local-${chatMode.url}-${chatMode.model}`;
+  }
+  return 'blocked';
+}
+
 export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
+  const chatMode = useSettingsStore((s) => s.chatMode);
+  const chatKey = getChatKey(chatMode);
+
+  return (
+    <BottomSheet isOpen={isOpen} onClose={onClose}>
+      <ChatContent
+        key={chatKey}
+        isOpen={isOpen}
+        chatMode={chatMode}
+        onClose={onClose}
+        onOpenSettings={onOpenSettings}
+      />
+    </BottomSheet>
+  );
+}
+
+interface ChatContentProps {
+  isOpen: boolean;
+  chatMode: ChatMode;
+  onClose: () => void;
+  onOpenSettings: () => void;
+}
+
+function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messageTimestamps = useRef<Map<string, Date>>(new Map());
 
   const db = usePGlite();
-  const chatEnabled = useSettingsStore((s) => s.chatEnabled);
+  const setChatMode = useSettingsStore((s) => s.setChatMode);
+
+  const isCloudMode = chatMode.type === 'cloud';
+  const canChat =
+    chatMode.type === 'cloud' ||
+    (chatMode.type === 'local' && chatMode.status === 'connected');
+
+  const isLocalBlocked =
+    chatMode.type === 'local' && chatMode.status !== 'connected';
 
   const formatValue = (col: string, value: unknown): string => {
     if (value === null || value === undefined) return 'none';
-    
+
     const colLower = col.toLowerCase();
     const isMonetary = colLower.includes('amount') || colLower.includes('total') || colLower.includes('sum');
-    
+
     if (isMonetary && typeof value === 'number') {
       return `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
     }
-    
+
     if (colLower.includes('date') && typeof value === 'string') {
       const date = new Date(value);
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       }
     }
-    
+
     return String(value);
   };
 
   const formatResults = (columns: string[], rows: unknown[][]): string => {
     if (rows.length === 0) return 'No results found';
-    
+
     const lines = rows.slice(0, 20).map((row) => {
       return columns.map((col, i) => `${col}: ${formatValue(col, row[i])}`).join(', ');
     });
-    
+
     if (rows.length > 20) {
       lines.push(`... and ${rows.length - 20} more rows`);
     }
-    
+
     return lines.join('\n');
   };
+
+  const executeLocalQuery = async (sql: string): Promise<string> => {
+    try {
+      const { columns, rows } = await executeQuery(db, sql);
+      return formatResults(columns, rows);
+    } catch (err) {
+      return `Error executing query: ${err instanceof Error ? err.message : 'Unknown error'}`;
+    }
+  };
+
+  const transport = useMemo(() => {
+    if (chatMode.type === 'cloud') {
+      return new DefaultChatTransport<UIMessage>({ api: `${PROXY_URL}/api/chat` });
+    }
+    if (chatMode.type === 'local' && chatMode.status === 'connected') {
+      return new LocalServerTransport(chatMode.url, chatMode.model, executeLocalQuery);
+    }
+    return new BlockedTransport();
+  }, [chatMode, db]);
 
   const [input, setInput] = useState('');
 
@@ -71,28 +168,28 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
     status,
     error,
     addToolOutput,
-  } = useChat({
-    transport: chatTransport,
+  } = useChat<UIMessage>({
+    transport,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onToolCall({ toolCall }) {
-      if (toolCall.toolName === 'queryDatabase') {
-        const toolInput = toolCall.input as { sql: string };
-        executeQuery(db, toolInput.sql)
-          .then(({ columns, rows }) => {
-            addToolOutput({
-              tool: toolCall.toolName,
-              toolCallId: toolCall.toolCallId,
-              output: formatResults(columns, rows),
-            });
-          })
-          .catch((err) => {
-            addToolOutput({
-              tool: toolCall.toolName,
-              toolCallId: toolCall.toolCallId,
-              output: `Error executing query: ${err instanceof Error ? err.message : 'Unknown error'}`,
-            });
+      if (!isCloudMode || toolCall.toolName !== 'queryDatabase') return;
+
+      const toolInput = toolCall.input as { sql: string };
+      executeQuery(db, toolInput.sql)
+        .then(({ columns, rows }) => {
+          addToolOutput({
+            tool: toolCall.toolName,
+            toolCallId: toolCall.toolCallId,
+            output: formatResults(columns, rows),
           });
-      }
+        })
+        .catch((err) => {
+          addToolOutput({
+            tool: toolCall.toolName,
+            toolCallId: toolCall.toolCallId,
+            output: `Error executing query: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          });
+        });
     },
   });
 
@@ -120,25 +217,31 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
 
   const onFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !chatEnabled) return;
+    if (!input.trim() || isLoading || !canChat) return;
     sendMessage({ text: input });
     setInput('');
   };
 
   const getErrorMessage = (): string | null => {
     if (!error) return null;
-    
+
     const errorStr = error.message || String(error);
-    
+
     if (errorStr.includes('rate_limit') || errorStr.includes('429')) {
       return "I'm getting a lot of requests right now! Please try again in a minute or two.";
     }
-    
+
     if (errorStr.includes('service_unavailable') || errorStr.includes('503')) {
       return "I'm having trouble connecting right now. Please try again in a moment.";
     }
-    
-    return "Something went wrong. Please try again.";
+
+    if (errorStr.includes('Failed to fetch') || errorStr.includes('NetworkError')) {
+      return chatMode.type === 'local'
+        ? "Can't connect to your local server. Make sure it's running."
+        : 'Connection failed. Check your internet connection.';
+    }
+
+    return 'Something went wrong. Please try again.';
   };
 
   const suggestedQuestions = [
@@ -150,29 +253,59 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
 
   const errorMessage = getErrorMessage();
 
+  const renderBlockedOverlay = () => {
+    if (!isLocalBlocked) return null;
+
+    const statusText = chatMode.type === 'local' && chatMode.status === 'error'
+      ? 'local server unreachable'
+      : 'local server not configured';
+
+    const errorText = chatMode.type === 'local' ? chatMode.error : null;
+
+    return (
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
+        <div className="tui-box p-6 text-center space-y-4 max-w-xs">
+          <p className="text-sm">{statusText}</p>
+
+          {errorText && (
+            <p className="text-xs text-muted-foreground">{errorText}</p>
+          )}
+
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={handleOpenSettings}
+              className="tui-btn-primary text-xs px-3 py-1.5"
+            >
+              [ open settings ]
+            </button>
+            <button
+              onClick={() => setChatMode('cloud')}
+              className="tui-btn-ghost text-xs px-3 py-1.5"
+            >
+              [ use cloud ]
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose}>
-      <div className="flex h-[70vh] flex-col overflow-hidden">
+    <div className="relative flex h-[70vh] flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-4 pb-3">
           <div className="flex items-center gap-2">
             <span className="text-accent">$</span>
             <h2 className="text-sm font-semibold">ask</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`tui-badge text-xs ${chatEnabled ? 'tui-badge-success' : ''}`}>
-              {chatEnabled ? 'on' : 'off'}
-            </span>
-          </div>
+          <ChatBadge mode={chatMode} />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             <div className="space-y-4">
-              {!chatEnabled && (
+              {chatMode.type === 'off' && (
                 <div className="tui-box p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    &gt; chat is disabled
-                  </p>
+                  <p className="text-xs text-muted-foreground">chat is disabled</p>
                   <p className="text-xs text-muted-foreground/70">
                     go to{' '}
                     <button
@@ -186,7 +319,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                 </div>
               )}
 
-              {chatEnabled && (
+              {canChat && (
                 <div className="flex flex-wrap gap-1.5 justify-center">
                   {suggestedQuestions.map((q) => (
                     <button
@@ -203,13 +336,13 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
           ) : (
             <>
               {messages.map((message, index) => (
-                <MessageBubble 
-                  key={message.id} 
+                <MessageBubble
+                  key={message.id}
                   message={message}
                   createdAt={messageTimestamps.current.get(message.id)}
                   isStreaming={
-                    isLoading && 
-                    message.role === 'assistant' && 
+                    isLoading &&
+                    message.role === 'assistant' &&
                     index === messages.length - 1
                   }
                 />
@@ -222,6 +355,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                   <div className="flex justify-start">
                     <div className="tui-box px-3 py-2 text-xs">
                       <span className="text-muted-foreground mr-1">&gt;</span>
+                      <span className="text-muted-foreground/50 mr-1">thinking...</span>
                       <span className="cursor-blink"></span>
                     </div>
                   </div>
@@ -229,7 +363,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
               })()}
             </>
           )}
-          
+
           {errorMessage && (
             <div className="flex justify-start">
               <div className="tui-box border-destructive/50 bg-destructive/10 px-3 py-2">
@@ -238,7 +372,7 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -251,22 +385,23 @@ export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="ask anything..."
-                disabled={isLoading || !chatEnabled}
+                placeholder={canChat ? 'ask anything...' : 'chat unavailable'}
+                disabled={isLoading || !canChat}
                 className="flex-1 bg-transparent px-2 py-2 text-base sm:text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
               />
             </div>
             <button
               type="submit"
-              disabled={!input.trim() || isLoading || !chatEnabled}
+              disabled={!input.trim() || isLoading || !canChat}
               className="tui-btn-primary px-3 py-2 text-xs disabled:opacity-30"
             >
-              go
+              {canChat ? 'go' : '—'}
             </button>
           </div>
         </form>
-      </div>
-    </BottomSheet>
+
+        {renderBlockedOverlay()}
+    </div>
   );
 }
 
@@ -274,7 +409,7 @@ interface MessageBubbleProps {
   message: {
     id: string;
     role: string;
-    parts: Array<{ type: string; text?: string }>;
+    parts?: Array<{ type: string; text?: string }>;
   };
   createdAt?: Date;
   isStreaming?: boolean;
@@ -314,7 +449,7 @@ function MessageBubble({ message, createdAt, isStreaming = false }: MessageBubbl
         {isStreaming && <span className="cursor-blink ml-0.5"></span>}
       </div>
       {content && (
-        <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-2 mt-1 opacity-40 group-hover:opacity-100 transition-opacity">
           {timeLabel && <span className="text-muted-foreground text-[10px]">{timeLabel}</span>}
           <button
             onClick={handleCopy}

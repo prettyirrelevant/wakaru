@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useLiveQuery } from '@electric-sql/pglite-react';
-import { BottomSheet } from '~/components/ui';
+import { BottomSheet, ModeToggle } from '~/components/ui';
 import { transactionsToCSV, downloadCSV } from '~/lib/csv';
 import { mapRowToTransaction, type TransactionRow } from '~/hooks/useTransactions';
 import { useSettingsStore } from '~/stores/settings';
 import { useTransactionStore } from '~/stores/transactions';
+import { LocalServerConfig } from './local-server-section';
 import type { Theme } from '~/types';
 
 interface SettingsSheetProps {
@@ -18,8 +19,8 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
-  const chatEnabled = useSettingsStore((s) => s.chatEnabled);
-  const setChatEnabled = useSettingsStore((s) => s.setChatEnabled);
+  const chatMode = useSettingsStore((s) => s.chatMode);
+  const setChatMode = useSettingsStore((s) => s.setChatMode);
 
   const result = useLiveQuery<TransactionRow>('SELECT * FROM transactions ORDER BY date DESC');
   const transactions = useMemo(
@@ -59,7 +60,6 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           <h2 className="text-sm font-semibold">config</h2>
         </div>
 
-        {/* Theme */}
         <section>
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <span>theme</span>
@@ -83,47 +83,28 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
         <div className="tui-divider my-4" />
 
-        {/* AI Chat */}
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs">
-              <span className="text-muted-foreground">ai chat</span>
-              <span className="text-muted-foreground/50 mx-1">—</span>
-              <span className="text-muted-foreground/70">ask about your spending</span>
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setChatEnabled(true)}
-                className={`text-xs px-2 py-0.5 border ${
-                  chatEnabled
-                    ? 'bg-accent text-accent-foreground border-accent'
-                    : 'bg-muted border-border hover:border-border-strong'
-                }`}
-                aria-label="Enable AI chat"
-              >
-                [on]
-              </button>
-              <button
-                onClick={() => setChatEnabled(false)}
-                className={`text-xs px-2 py-0.5 border ${
-                  !chatEnabled
-                    ? 'bg-accent text-accent-foreground border-accent'
-                    : 'bg-muted border-border hover:border-border-strong'
-                }`}
-                aria-label="Disable AI chat"
-              >
-                [off]
-              </button>
-            </div>
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>ai chat</span>
           </div>
-          <p className="text-xs text-muted-foreground/50">
-            &gt; we only see what you ask about. nothing more.
-          </p>
+
+          <ModeToggle
+            value={chatMode.type}
+            onChange={setChatMode}
+            localStatus={chatMode.type === 'local' ? chatMode.status : undefined}
+          />
+
+          {chatMode.type === 'cloud' && (
+            <p className="text-xs text-muted-foreground/50">
+              proxies to gemini · we see your questions, not your data
+            </p>
+          )}
+
+          {chatMode.type === 'local' && <LocalServerConfig />}
         </section>
 
         <div className="tui-divider my-4" />
 
-        {/* Data Management */}
         <section>
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <span>data</span>
