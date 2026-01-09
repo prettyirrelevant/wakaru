@@ -1,15 +1,20 @@
 import {
-  type BankParser,
   type RawRow,
   type Transaction,
   type TransactionMeta,
   BankType,
-  TransactionCategory,
   TransactionType,
 } from '~/types';
+import { BaseParser, type ParserLogger, consoleLogger } from './base';
 
-export class ZenithParser implements BankParser {
+export class ZenithParser extends BaseParser {
   readonly bankName = 'Zenith';
+  protected readonly bankType = BankType.Zenith;
+  protected readonly idPrefix = 'zenith';
+
+  constructor(logger: ParserLogger = consoleLogger) {
+    super(logger);
+  }
 
   static extractRowsFromPdfText(text: string): RawRow[] {
     const rows: RawRow[] = [];
@@ -43,90 +48,41 @@ export class ZenithParser implements BankParser {
   parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
     if (!row || row.length < 4) return null;
 
-    try {
-      const dateStr = row[0]?.toString().trim() || '';
-      const description = row[1]?.toString().trim() || '';
-      const debitStr = row[2]?.toString().trim() || '';
-      const creditStr = row[3]?.toString().trim() || '';
-      const valueDate = row[4]?.toString().trim() || '';
-      const balanceStr = row[5]?.toString().trim() || '';
+    const dateStr = row[0]?.toString().trim() || '';
+    const description = row[1]?.toString().trim() || '';
+    const debitStr = row[2]?.toString().trim() || '';
+    const creditStr = row[3]?.toString().trim() || '';
+    const valueDate = row[4]?.toString().trim() || '';
+    const balanceStr = row[5]?.toString().trim() || '';
 
-      const date = this.parseDate(dateStr);
-      if (!date) return null;
+    const date = this.parseDDMMYYYY(dateStr);
+    if (!date) return null;
 
-      const amount = this.parseAmount(debitStr, creditStr);
-      if (amount === null) return null;
+    const amount = this.parseDebitCredit(debitStr, creditStr);
+    if (amount === null) return null;
 
-      const counterpartyInfo = this.extractCounterparty(description);
+    const counterpartyInfo = this.extractCounterparty(description);
 
-      const meta: TransactionMeta = {
-        type: this.inferTransactionType(description),
-        narration: description,
-        ...counterpartyInfo,
-      };
+    const meta: TransactionMeta = {
+      type: this.inferTransactionType(description),
+      narration: description,
+      ...counterpartyInfo,
+    };
 
-      if (balanceStr) {
-        const balance = this.parseAmountValue(balanceStr);
-        if (balance !== null) {
-          meta.balanceAfter = balance;
-        }
+    if (balanceStr) {
+      const balance = this.parseAmountValue(balanceStr);
+      if (balance !== null) {
+        meta.balanceAfter = balance;
       }
-
-      return {
-        id: this.generateId(date, amount, description, valueDate),
-        date: date.toISOString(),
-        createdAt: Math.floor(Date.now() / 1000),
-        description: description || 'Transaction',
-        amount,
-        category:
-          amount > 0 ? TransactionCategory.Inflow : TransactionCategory.Outflow,
-        bankSource: BankType.Zenith,
-        reference: this.generateReference(date, description),
-        meta,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private parseDate(dateStr: string): Date | null {
-    const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (!match) return null;
-
-    const [, day, month, year] = match;
-    const date = new Date(
-      parseInt(year, 10),
-      parseInt(month, 10) - 1,
-      parseInt(day, 10)
-    );
-
-    return isNaN(date.getTime()) ? null : date;
-  }
-
-  private parseAmount(debitStr: string, creditStr: string): number | null {
-    const debit = this.parseAmountValue(debitStr);
-    const credit = this.parseAmountValue(creditStr);
-
-    if (credit && credit > 0) {
-      return credit;
     }
 
-    if (debit && debit > 0) {
-      return -debit;
-    }
-
-    return null;
-  }
-
-  private parseAmountValue(amountStr: string): number | null {
-    if (!amountStr) return null;
-
-    const cleaned = amountStr.replace(/[₦,\s]/g, '').trim();
-    const amount = parseFloat(cleaned);
-
-    if (isNaN(amount) || amount === 0) return null;
-
-    return Math.round(amount * 100);
+    return this.createTransaction({
+      date,
+      amount,
+      description: description || 'Transaction',
+      reference: this.generateReference(date, description, 15),
+      meta,
+    });
   }
 
   private extractCounterparty(description: string): Partial<TransactionMeta> {
@@ -228,35 +184,5 @@ export class ZenithParser implements BankParser {
     }
 
     return TransactionType.Other;
-  }
-
-  private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  private generateId(
-    date: Date,
-    amount: number,
-    description: string,
-    valueDate?: string
-  ): string {
-    const hash = this.simpleHash(
-      `${date.toISOString()}-${amount}-${description}-${valueDate || ''}`
-    );
-    return `zenith-${hash}`;
-  }
-
-  private generateReference(date: Date, description?: string): string {
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const descPart = description?.substring(0, 15) || '';
-    return `${dateStr}-${descPart}`
-      .replace(/[^a-zA-Z0-9-]/g, '')
-      .toUpperCase();
   }
 }

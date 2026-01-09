@@ -1,63 +1,60 @@
 import {
-  type BankParser,
   type RawRow,
   type Transaction,
   type TransactionMeta,
   BankType,
-  TransactionCategory,
   TransactionType,
 } from '~/types';
+import { BaseParser, type ParserLogger, consoleLogger } from './base';
 
 const OWEALTH_PATTERNS = [
   'owealth withdrawal',
   'auto-save to owealth',
 ];
 
-export class OPayParser implements BankParser {
+export class OPayParser extends BaseParser {
   readonly bankName = 'OPay';
+  protected readonly bankType = BankType.OPay;
+  protected readonly idPrefix = 'opay';
+
+  constructor(logger: ParserLogger = consoleLogger) {
+    super(logger);
+  }
 
   parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
     if (!row || row.length < 5) return null;
 
-    try {
-      // [DateTime, Date, Description, Debit, Credit, Balance, Channel, Reference]
-      const dateTime = row[0]?.toString().trim() || '';
-      const description = row[2]?.toString().trim() || '';
-      const debit = row[3]?.toString().trim();
-      const credit = row[4]?.toString().trim();
-      const reference = row[7]?.toString().trim() || '';
+    // [DateTime, Date, Description, Debit, Credit, Balance, Channel, Reference]
+    const dateTime = row[0]?.toString().trim() || '';
+    const description = row[2]?.toString().trim() || '';
+    const debit = row[3]?.toString().trim();
+    const credit = row[4]?.toString().trim();
+    const reference = row[7]?.toString().trim() || '';
 
-      if (this.shouldSkipTransaction(description)) return null;
+    if (this.shouldSkipTransaction(description)) return null;
 
-      const date = this.parseDateTime(dateTime);
-      if (!date) return null;
+    const date = this.parseDateTime(dateTime);
+    if (!date) return null;
 
-      const amount = this.parseAmount(debit, credit);
-      if (amount === null) return null;
+    const amount = this.parseAmount(debit, credit);
+    if (amount === null) return null;
 
-      const txDescription = description || 'Transaction';
-      const counterpartyInfo = this.extractCounterparty(description);
+    const txDescription = description || 'Transaction';
+    const counterpartyInfo = this.extractCounterparty(description);
 
-      const meta: TransactionMeta = {
-        type: this.inferTransactionType(description),
-        narration: description,
-        ...counterpartyInfo,
-      };
+    const meta: TransactionMeta = {
+      type: this.inferTransactionType(description),
+      narration: description,
+      ...counterpartyInfo,
+    };
 
-      return {
-        id: this.generateId(date, amount, reference, description),
-        date: date.toISOString(),
-        createdAt: Math.floor(Date.now() / 1000),
-        description: txDescription,
-        amount,
-        category: amount > 0 ? TransactionCategory.Inflow : TransactionCategory.Outflow,
-        bankSource: BankType.OPay,
-        reference: reference || this.generateReference(date, description),
-        meta,
-      };
-    } catch {
-      return null;
-    }
+    return this.createTransaction({
+      date,
+      amount,
+      description: txDescription,
+      reference: reference || this.generateReference(date, description),
+      meta,
+    });
   }
 
   private shouldSkipTransaction(description: string): boolean {
@@ -66,11 +63,6 @@ export class OPayParser implements BankParser {
   }
 
   private parseDateTime(dateStr: string): Date | null {
-    const months: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-    };
-
     // "29 Nov 2025 08:12:51"
     const match = dateStr.match(
       /(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/
@@ -78,7 +70,7 @@ export class OPayParser implements BankParser {
     if (!match) return null;
 
     const [, day, monthStr, year, hour, minute, second] = match;
-    const month = months[monthStr.toLowerCase()];
+    const month = this.parseMonthName(monthStr);
     if (month === undefined) return null;
 
     const date = new Date(
@@ -108,13 +100,6 @@ export class OPayParser implements BankParser {
     }
 
     return null;
-  }
-
-  private parseAmountValue(amountStr: string): number | null {
-    const cleaned = amountStr.replace(/[₦$,\s]/g, '').trim();
-    const amount = parseFloat(cleaned);
-    if (isNaN(amount)) return null;
-    return Math.round(amount * 100);
   }
 
   private extractCounterparty(description: string): Partial<TransactionMeta> {
@@ -168,26 +153,5 @@ export class OPayParser implements BankParser {
     }
 
     return TransactionType.Other;
-  }
-
-  private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  private generateId(date: Date, amount: number, reference?: string, description?: string): string {
-    const hash = this.simpleHash(`${date.toISOString()}-${amount}-${reference || ''}-${description || ''}`);
-    return `opay-${hash}`;
-  }
-
-  private generateReference(date: Date, description?: string): string {
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const descPart = description?.substring(0, 10) || '';
-    return `${dateStr}-${descPart}`.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase();
   }
 }

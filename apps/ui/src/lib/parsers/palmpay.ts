@@ -1,64 +1,69 @@
 import {
-  type BankParser,
   type RawRow,
   type Transaction,
   type TransactionMeta,
   BankType,
-  TransactionCategory,
   TransactionType,
 } from '~/types';
+import { BaseParser, type ParserLogger, consoleLogger } from './base';
 
 const DATE_PATTERN = /^\d{2}\/\d{2}\/\d{4}/;
 const AMOUNT_PATTERN = /^[+-]?[\d,.]+$/;
 const TX_ID_PATTERN = /^[a-z0-9_]+$/i;
 
-export class PalmPayParser implements BankParser {
+export class PalmPayParser extends BaseParser {
   readonly bankName = 'PalmPay';
+  protected readonly bankType = BankType.PalmPay;
+  protected readonly idPrefix = 'palmpay';
+
+  constructor(logger: ParserLogger = consoleLogger) {
+    super(logger);
+  }
 
   static extractRowsFromPdfText(text: string): RawRow[] {
     const rows: RawRow[] = [];
     const datePattern = /(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}\s+(?:AM|PM))/gi;
     const chunks = text.split(datePattern).filter(Boolean);
-    
+
     for (let i = 1; i < chunks.length - 1; i += 2) {
       const dateTime = chunks[i].trim();
       const rest = chunks[i + 1]?.trim() || '';
-      
+
       if (!dateTime || !rest) continue;
       if (rest.includes('Transaction Date') || rest.includes('Transaction Detail')) continue;
-      
+
       const amountMatch = rest.match(/([+-]\d+(?:,\d{3})*\.\d{2})/);
-      
+
       if (amountMatch) {
         const amount = amountMatch[1];
         const amountIndex = rest.indexOf(amount);
         const description = rest.slice(0, amountIndex).trim();
         const transactionId = rest.slice(amountIndex + amount.length).trim();
-        
+
         rows.push([`${dateTime} ${description}`, amount, transactionId]);
       }
     }
-    
+
     return rows;
   }
 
   static preprocessRows(rows: RawRow[]): RawRow[] {
     const result: RawRow[] = [];
     let pendingForwardContinuations: string[] = [];
-    
+
     for (const row of rows) {
       const firstCell = row[0]?.toString() || '';
       const startsWithDate = DATE_PATTERN.test(firstCell);
       const nonEmptyCells = row.filter((cell) => cell !== undefined && cell !== '');
-      
-      const continuationText = nonEmptyCells.length === 1 
+
+      const continuationText = nonEmptyCells.length === 1
         ? nonEmptyCells[0]?.toString() || ''
         : '';
-      
-      const isContinuation = !startsWithDate && 
-                             nonEmptyCells.length === 1 && 
+
+      const isContinuation = !startsWithDate &&
+                             nonEmptyCells.length === 1 &&
                              this.isDescriptionContinuation(continuationText);
-      
+
       if (startsWithDate) {
         if (pendingForwardContinuations.length > 0) {
           const descColIdx = row.length > 1 ? 1 : 0;
@@ -69,7 +74,7 @@ export class PalmPayParser implements BankParser {
         result.push(row);
       } else if (isContinuation) {
         const isForwardContinuation = this.isForwardContinuation(continuationText);
-        
+
         if (isForwardContinuation) {
           pendingForwardContinuations.push(continuationText);
         } else if (result.length > 0) {
@@ -84,7 +89,7 @@ export class PalmPayParser implements BankParser {
         result.push(row);
       }
     }
-    
+
     return result;
   }
 
@@ -105,58 +110,50 @@ export class PalmPayParser implements BankParser {
   parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
     if (!row || row.length < 3) return null;
 
-    try {
-      const { date, description, amountStr, transactionId } = this.extractRowData(row);
+    const { date, description, amountStr, transactionId } = this.extractRowData(row);
 
-      if (!date) return null;
+    if (!date) return null;
 
-      const amount = this.parseSignedAmount(amountStr);
-      if (amount === null) return null;
+    const amount = this.parseSignedAmount(amountStr);
+    if (amount === null) return null;
 
-      const txDescription = description || 'Transaction';
-      const counterpartyInfo = this.extractCounterparty(description);
+    const txDescription = description || 'Transaction';
+    const counterpartyInfo = this.extractCounterparty(description);
 
-      const meta: TransactionMeta = {
-        type: this.inferTransactionType(description),
-        narration: description,
-        ...counterpartyInfo,
-      };
+    const meta: TransactionMeta = {
+      type: this.inferTransactionType(description),
+      narration: description,
+      ...counterpartyInfo,
+    };
 
-      return {
-        id: this.generateId(date, amount, transactionId, description),
-        date: date.toISOString(),
-        createdAt: Math.floor(Date.now() / 1000),
-        description: txDescription,
-        amount,
-        category: amount > 0 ? TransactionCategory.Inflow : TransactionCategory.Outflow,
-        bankSource: BankType.PalmPay,
-        reference: transactionId || this.generateReference(date, description),
-        meta,
-      };
-    } catch {
-      return null;
-    }
+    return this.createTransaction({
+      date,
+      amount,
+      description: txDescription,
+      reference: transactionId || this.generateReference(date, description),
+      meta,
+    });
   }
 
-  private extractRowData(row: RawRow): { 
-    date: Date | null; 
-    description: string; 
-    amountStr: string; 
+  private extractRowData(row: RawRow): {
+    date: Date | null;
+    description: string;
+    amountStr: string;
     transactionId: string;
   } {
     const firstCell = row[0]?.toString().trim() || '';
-    
+
     if (row.length >= 4) {
       const dateStr = firstCell;
       const description = row[1]?.toString().trim() || '';
       const moneyIn = row[2]?.toString().trim() || '';
       const moneyOut = row[3]?.toString().trim() || '';
       const transactionId = row[4]?.toString().trim() || row[3]?.toString().trim() || '';
-      
+
       const date = this.parseDateTime(dateStr);
       const amountStr = moneyIn || moneyOut;
       const txId = moneyIn ? (row[4]?.toString().trim() || '') : transactionId;
-      
+
       return { date, description, amountStr, transactionId: txId };
     }
 
@@ -194,7 +191,7 @@ export class PalmPayParser implements BankParser {
     if (!match) return null;
 
     const [, month, day, year, hourStr, minute, second, meridiem] = match;
-    
+
     let hour = parseInt(hourStr, 10);
     if (meridiem.toUpperCase() === 'PM' && hour !== 12) {
       hour += 12;
@@ -243,7 +240,7 @@ export class PalmPayParser implements BankParser {
 
   private inferTransactionType(description?: string): TransactionType {
     if (!description) return TransactionType.Other;
-    
+
     const lower = description.toLowerCase();
 
     if (lower.includes('airtime') || lower.includes('recharge')) {
@@ -272,26 +269,5 @@ export class PalmPayParser implements BankParser {
     }
 
     return TransactionType.Other;
-  }
-
-  private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  private generateId(date: Date, amount: number, reference?: string, description?: string): string {
-    const hash = this.simpleHash(`${date.toISOString()}-${amount}-${reference || ''}-${description || ''}`);
-    return `palmpay-${hash}`;
-  }
-
-  private generateReference(date: Date, description?: string): string {
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const descPart = description?.substring(0, 10) || '';
-    return `${dateStr}-${descPart}`.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase();
   }
 }

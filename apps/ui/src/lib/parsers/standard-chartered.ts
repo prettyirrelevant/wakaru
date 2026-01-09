@@ -1,13 +1,12 @@
 import {
-  type BankParser,
   type RawRow,
   type Transaction,
   type TransactionMeta,
   BankType,
-  TransactionCategory,
   TransactionType,
 } from '~/types';
 import { getMatchIndex } from '~/lib/utils';
+import { BaseParser, type ParserLogger, consoleLogger } from './base';
 
 interface ExtractedRow {
   date: string;
@@ -17,8 +16,14 @@ interface ExtractedRow {
   isCredit: boolean;
 }
 
-export class StandardCharteredParser implements BankParser {
+export class StandardCharteredParser extends BaseParser {
   readonly bankName = 'Standard Chartered';
+  protected readonly bankType = BankType.StandardChartered;
+  protected readonly idPrefix = 'sc';
+
+  constructor(logger: ParserLogger = consoleLogger) {
+    super(logger);
+  }
 
   static extractRowsFromPdfText(text: string): RawRow[] {
     const extractedRows: ExtractedRow[] = [];
@@ -112,57 +117,44 @@ export class StandardCharteredParser implements BankParser {
   parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
     if (!row || row.length < 5) return null;
 
-    try {
-      const dateStr = row[0]?.toString().trim() || '';
-      const description = row[1]?.toString().trim() || '';
-      const amountStr = row[2]?.toString().trim() || '';
-      const balanceStr = row[3]?.toString().trim() || '';
-      const isCredit = row[4]?.toString() === 'credit';
+    const dateStr = row[0]?.toString().trim() || '';
+    const description = row[1]?.toString().trim() || '';
+    const amountStr = row[2]?.toString().trim() || '';
+    const balanceStr = row[3]?.toString().trim() || '';
+    const isCredit = row[4]?.toString() === 'credit';
 
-      const date = this.parseDate(dateStr);
-      if (!date) return null;
+    const date = this.parseDate(dateStr);
+    if (!date) return null;
 
-      const amount = this.parseAmount(amountStr, isCredit);
-      if (amount === null) return null;
+    const amount = this.parseAmount(amountStr, isCredit);
+    if (amount === null) return null;
 
-      const meta: TransactionMeta = {
-        type: this.inferTransactionType(description),
-        narration: description,
-        ...this.extractCounterparty(description),
-      };
+    const meta: TransactionMeta = {
+      type: this.inferTransactionType(description),
+      narration: description,
+      ...this.extractCounterparty(description),
+    };
 
-      const balanceAfter = this.parseAmountValue(balanceStr);
-      if (balanceAfter !== null) {
-        meta.balanceAfter = balanceAfter;
-      }
-
-      return {
-        id: this.generateId(date, amount, description),
-        date: date.toISOString(),
-        createdAt: Math.floor(Date.now() / 1000),
-        description: description || 'Transaction',
-        amount,
-        category: amount > 0 ? TransactionCategory.Inflow : TransactionCategory.Outflow,
-        bankSource: BankType.StandardChartered,
-        reference: this.generateReference(date, description),
-        meta,
-      };
-    } catch {
-      return null;
+    const balanceAfter = this.parseAmountValue(balanceStr);
+    if (balanceAfter !== null) {
+      meta.balanceAfter = balanceAfter;
     }
+
+    return this.createTransaction({
+      date,
+      amount,
+      description: description || 'Transaction',
+      reference: this.generateReference(date, description, 15),
+      meta,
+    });
   }
 
   private parseDate(dateStr: string): Date | null {
-    const months: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-    };
-
     const match = dateStr.match(/(\d{2}) ([A-Za-z]{3}) (\d{4})/);
     if (!match) return null;
 
     const [, day, monthStr, year] = match;
-    const month = months[monthStr.toLowerCase()];
+    const month = this.parseMonthName(monthStr);
     if (month === undefined) return null;
 
     const date = new Date(Date.UTC(parseInt(year, 10), month, parseInt(day, 10), 0, 0, 0, 0));
@@ -173,14 +165,6 @@ export class StandardCharteredParser implements BankParser {
     const value = this.parseAmountValue(amountStr);
     if (value === null) return null;
     return isCredit ? value : -value;
-  }
-
-  private parseAmountValue(amountStr: string): number | null {
-    if (!amountStr) return null;
-    const cleaned = amountStr.replace(/[₦,\s]/g, '').trim();
-    const amount = parseFloat(cleaned);
-    if (isNaN(amount)) return null;
-    return Math.round(amount * 100);
   }
 
   private extractCounterparty(description: string): Partial<TransactionMeta> {
@@ -235,26 +219,5 @@ export class StandardCharteredParser implements BankParser {
     }
 
     return TransactionType.Other;
-  }
-
-  private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  private generateId(date: Date, amount: number, description?: string): string {
-    const hash = this.simpleHash(`${date.toISOString()}-${amount}-${description || ''}`);
-    return `sc-${hash}`;
-  }
-
-  private generateReference(date: Date, description?: string): string {
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const descPart = description?.substring(0, 15) || '';
-    return `${dateStr}-${descPart}`.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase();
   }
 }

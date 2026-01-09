@@ -1,16 +1,21 @@
 import {
-  type BankParser,
   type RawRow,
   type Transaction,
   type TransactionMeta,
   BankType,
-  TransactionCategory,
   TransactionType,
 } from '~/types';
 import { getMatchIndex } from '~/lib/utils';
+import { BaseParser, type ParserLogger, consoleLogger } from './base';
 
-export class SterlingParser implements BankParser {
+export class SterlingParser extends BaseParser {
   readonly bankName = 'Sterling';
+  protected readonly bankType = BankType.Sterling;
+  protected readonly idPrefix = 'sterling';
+
+  constructor(logger: ParserLogger = consoleLogger) {
+    super(logger);
+  }
 
   static extractRowsFromPdfText(text: string): RawRow[] {
     const hasMonthNames = /\d{2}-[A-Za-z]{3}-\d{4}/.test(text);
@@ -154,82 +159,45 @@ export class SterlingParser implements BankParser {
   parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
     if (!row || row.length < 6) return null;
 
-    try {
-      const dateStr = row[0]?.toString().trim() || '';
-      const reference = row[1]?.toString().trim() || '';
-      const narration = row[2]?.toString().trim() || '';
-      const moneyInStr = row[3]?.toString().trim() || '';
-      const moneyOutStr = row[4]?.toString().trim() || '';
-      const balanceStr = row[5]?.toString().trim() || '';
+    const dateStr = row[0]?.toString().trim() || '';
+    const reference = row[1]?.toString().trim() || '';
+    const narration = row[2]?.toString().trim() || '';
+    const moneyInStr = row[3]?.toString().trim() || '';
+    const moneyOutStr = row[4]?.toString().trim() || '';
+    const balanceStr = row[5]?.toString().trim() || '';
 
-      const date = this.parseDate(dateStr);
-      if (!date) return null;
+    const date = this.parseDDMMYYYYDash(dateStr);
+    if (!date) return null;
 
-      const amount = this.parseAmount(moneyInStr, moneyOutStr);
-      if (amount === null) return null;
+    const amount = this.parseDebitCredit(moneyOutStr, moneyInStr);
+    if (amount === null) return null;
 
-      const counterpartyInfo = this.extractCounterparty(narration);
+    const counterpartyInfo = this.extractCounterparty(narration);
 
-      const meta: TransactionMeta = {
-        type: this.inferTransactionType(narration),
-        narration,
-        ...counterpartyInfo,
-      };
+    const meta: TransactionMeta = {
+      type: this.inferTransactionType(narration),
+      narration,
+      ...counterpartyInfo,
+    };
 
-      if (balanceStr) {
-        const balance = this.parseAmountValue(balanceStr);
-        if (balance !== null) {
-          meta.balanceAfter = balance;
-        }
+    if (balanceStr) {
+      const balance = this.parseAmountValue(balanceStr);
+      if (balance !== null) {
+        meta.balanceAfter = balance;
       }
-
-      if (reference) {
-        meta.sessionId = reference;
-      }
-
-      return {
-        id: this.generateId(date, amount, narration),
-        date: date.toISOString(),
-        createdAt: Math.floor(Date.now() / 1000),
-        description: narration || 'Transaction',
-        amount,
-        category: amount > 0 ? TransactionCategory.Inflow : TransactionCategory.Outflow,
-        bankSource: BankType.Sterling,
-        reference: this.generateReference(date, narration),
-        meta,
-      };
-    } catch {
-      return null;
     }
-  }
 
-  private parseDate(dateStr: string): Date | null {
-    const match = dateStr.match(/(\d{2})-(\d{2})-(\d{4})/);
-    if (!match) return null;
+    if (reference) {
+      meta.sessionId = reference;
+    }
 
-    const [, day, month, year] = match;
-    const date = new Date(
-      Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 0, 0, 0, 0)
-    );
-
-    return isNaN(date.getTime()) ? null : date;
-  }
-
-  private parseAmount(moneyInStr: string, moneyOutStr: string): number | null {
-    const moneyIn = this.parseAmountValue(moneyInStr);
-    const moneyOut = this.parseAmountValue(moneyOutStr);
-
-    if (moneyIn && moneyIn > 0) return moneyIn;
-    if (moneyOut && moneyOut > 0) return -moneyOut;
-    return null;
-  }
-
-  private parseAmountValue(amountStr: string): number | null {
-    if (!amountStr || amountStr === '-') return null;
-    const cleaned = amountStr.replace(/[₦,\s]/g, '').trim();
-    const amount = parseFloat(cleaned);
-    if (isNaN(amount) || amount === 0) return null;
-    return Math.round(amount * 100);
+    return this.createTransaction({
+      date,
+      amount,
+      description: narration || 'Transaction',
+      reference: this.generateReference(date, narration, 15),
+      meta,
+    });
   }
 
   private extractCounterparty(narration: string): Partial<TransactionMeta> {
@@ -275,8 +243,16 @@ export class SterlingParser implements BankParser {
   private inferTransactionType(narration: string): TransactionType {
     const lower = narration.toLowerCase();
 
+    if (lower.includes('reversal') || lower.includes('refund')) {
+      return TransactionType.Reversal;
+    }
+
+    if (lower.includes('interest')) {
+      return TransactionType.Interest;
+    }
+
     if (lower.includes('onebank transfer') || lower.includes('banknip') ||
-        lower.includes('nip ') || lower.includes('transfer')) {
+        lower.includes('nip ') || lower.includes('remitastp') || lower.includes('remita')) {
       return TransactionType.Transfer;
     }
 
@@ -299,39 +275,10 @@ export class SterlingParser implements BankParser {
       return TransactionType.BankCharge;
     }
 
-    if (lower.includes('remitastp') || lower.includes('remita')) {
+    if (lower.includes('transfer')) {
       return TransactionType.Transfer;
     }
 
-    if (lower.includes('reversal') || lower.includes('refund')) {
-      return TransactionType.Reversal;
-    }
-
-    if (lower.includes('interest')) {
-      return TransactionType.Interest;
-    }
-
     return TransactionType.Other;
-  }
-
-  private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  private generateId(date: Date, amount: number, narration: string): string {
-    const hash = this.simpleHash(`${date.toISOString()}-${amount}-${narration}`);
-    return `sterling-${hash}`;
-  }
-
-  private generateReference(date: Date, narration?: string): string {
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const descPart = narration?.substring(0, 15) || '';
-    return `${dateStr}-${descPart}`.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase();
   }
 }
