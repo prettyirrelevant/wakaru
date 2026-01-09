@@ -9,7 +9,10 @@
     "build:server": "pnpm --filter @wakaru/server deploy",
     "lint": "pnpm --filter @wakaru/ui lint",
     "lint:fix": "pnpm --filter @wakaru/ui lint:fix",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @wakaru/ui test",
+    "test:run": "pnpm --filter @wakaru/ui test:run",
+    "test:coverage": "pnpm --filter @wakaru/ui test:coverage"
   },
   "license": "MIT",
   "author": {

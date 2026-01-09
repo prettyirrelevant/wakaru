@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from '@electric-sql/pglite-react';
 import type { Transaction, TransactionMeta } from '~/types';
-import { type FilterState, emptyFilterState, buildWhereClause } from '~/lib/filters';
+import { type FilterState, type WhereClauseResult, emptyFilterState, buildWhereClause } from '~/lib/filters';
 
 export type SortField = 'date' | 'amount';
 export type SortOrder = 'asc' | 'desc';
@@ -60,15 +60,18 @@ export function useTransactions() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(emptyFilterState);
 
-  const query = useMemo(() => {
+  const { query, params } = useMemo(() => {
     const orderByColumn = sortField === 'amount' ? 'ABS(amount)' : 'date';
     const orderDir = sortOrder === 'desc' ? 'DESC' : 'ASC';
     const whereClause = buildWhereClause(filters, searchQuery);
-    
-    return `SELECT * FROM transactions WHERE ${whereClause} ORDER BY ${orderByColumn} ${orderDir}`;
+
+    return {
+      query: `SELECT * FROM transactions WHERE ${whereClause.sql} ORDER BY ${orderByColumn} ${orderDir}`,
+      params: whereClause.params,
+    };
   }, [sortField, sortOrder, searchQuery, filters]);
 
-  const result = useLiveQuery<TransactionRow>(query);
+  const result = useLiveQuery<TransactionRow>(query, params);
   
   const transactions = useMemo(
     () => (result?.rows ?? []).map(mapRowToTransaction),

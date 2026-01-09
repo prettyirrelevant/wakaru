@@ -50,12 +50,23 @@ export function countActiveFilters(state: FilterState): number {
   return count;
 }
 
-export function buildWhereClause(filters: FilterState, searchText: string): string {
+export interface WhereClauseResult {
+  sql: string;
+  params: (string | number)[];
+}
+
+export function buildWhereClause(filters: FilterState, searchText: string): WhereClauseResult {
   const conditions: string[] = [];
+  const params: (string | number)[] = [];
 
   if (filters.banks.length > 0) {
-    const bankList = filters.banks.map(b => `'${b}'`).join(', ');
-    conditions.push(`bank_source IN (${bankList})`);
+    const placeholders = filters.banks.map(() => {
+      params.push(params.length + 1);
+      return `$${params.length}`;
+    });
+    // Replace the placeholder indices with actual bank values
+    params.splice(params.length - filters.banks.length, filters.banks.length, ...filters.banks);
+    conditions.push(`bank_source IN (${placeholders.join(', ')})`);
   }
 
   if (filters.flow === 'in') {
@@ -66,30 +77,39 @@ export function buildWhereClause(filters: FilterState, searchText: string): stri
 
   if (filters.amountMin !== null) {
     const kobo = filters.amountMin * 100;
-    conditions.push(`ABS(amount) >= ${kobo}`);
+    params.push(kobo);
+    conditions.push(`ABS(amount) >= $${params.length}`);
   }
 
   if (filters.amountMax !== null) {
     const kobo = filters.amountMax * 100;
-    conditions.push(`ABS(amount) <= ${kobo}`);
+    params.push(kobo);
+    conditions.push(`ABS(amount) <= $${params.length}`);
   }
 
   if (filters.dateFrom) {
-    conditions.push(`date >= '${filters.dateFrom}'`);
+    params.push(filters.dateFrom);
+    conditions.push(`date >= $${params.length}`);
   }
 
   if (filters.dateTo) {
-    conditions.push(`date <= '${filters.dateTo}'`);
+    params.push(filters.dateTo);
+    conditions.push(`date <= $${params.length}`);
   }
 
   if (searchText.trim()) {
-    const escaped = searchText.trim().replace(/'/g, "''");
+    const searchPattern = `%${searchText.trim()}%`;
+    params.push(searchPattern);
+    const paramIndex = params.length;
     conditions.push(
-      `(LOWER(description) LIKE LOWER('%${escaped}%') OR LOWER(counterparty_name) LIKE LOWER('%${escaped}%'))`
+      `(LOWER(description) LIKE LOWER($${paramIndex}) OR LOWER(counterparty_name) LIKE LOWER($${paramIndex}))`
     );
   }
 
-  return conditions.length > 0 ? conditions.join(' AND ') : '1=1';
+  return {
+    sql: conditions.length > 0 ? conditions.join(' AND ') : '1=1',
+    params,
+  };
 }
 
 export function formatFilterChips(filters: FilterState): { label: string; onRemove: () => FilterState }[] {
