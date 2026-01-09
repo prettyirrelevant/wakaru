@@ -65,7 +65,7 @@ export class WemaParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 4) return null;
 
     const date = this.parseDate(row[0]?.toString() || '');

@@ -107,7 +107,7 @@ export class PalmPayParser extends BaseParser {
     return true;
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 3) return null;
 
     const { date, description, amountStr, transactionId } = this.extractRowData(row);

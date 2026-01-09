@@ -41,7 +41,7 @@ export class GtbParser extends BaseParser {
       ? parseFloat(openingBalanceMatch[1].replace(/,/g, ''))
       : 0;
 
-    let cleanText = text
+    const cleanText = text
       .replace(
         /This is a computer generated Email\..*?local branch\.\d+\./gs,
         ' '
@@ -155,7 +155,7 @@ export class GtbParser extends BaseParser {
     return { branchCode, branchName: '', remarks: afterCode };
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 7) return null;
 
     const transDateStr = row[0]?.toString().trim() || '';

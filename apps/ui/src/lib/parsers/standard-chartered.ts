@@ -114,7 +114,7 @@ export class StandardCharteredParser extends BaseParser {
     ]);
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 5) return null;
 
     const dateStr = row[0]?.toString().trim() || '';
@@ -171,7 +171,7 @@ export class StandardCharteredParser extends BaseParser {
     if (!description) return {};
 
     const nipMatch = description.match(
-      /^([A-Z][A-Z\s,\-\.]+?)(?:\s+(?:V\.\d+|\d{5,}|IL\d+|NG-|NIP|IBK|POS|CASH|100\d{3}))/i
+      /^([A-Z][A-Z\s,\-.]+?)(?:\s+(?:V\.\d+|\d{5,}|IL\d+|NG-|NIP|IBK|POS|CASH|100\d{3}))/i
     );
     if (nipMatch) {
       return { counterpartyName: nipMatch[1].trim() };

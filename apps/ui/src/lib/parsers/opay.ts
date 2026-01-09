@@ -21,7 +21,7 @@ export class OPayParser extends BaseParser {
     super(logger);
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 5) return null;
 
     // [DateTime, Date, Description, Debit, Credit, Balance, Channel, Reference]

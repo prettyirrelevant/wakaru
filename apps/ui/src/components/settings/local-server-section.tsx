@@ -9,14 +9,19 @@ export function LocalServerConfig() {
   const testLocalConnection = useSettingsStore((s) => s.testLocalConnection);
   const disconnectLocalServer = useSettingsStore((s) => s.disconnectLocalServer);
 
-  if (chatMode.type !== 'local') return null;
-
-  const { status, url, model, models, error } = chatMode;
+  const isLocal = chatMode.type === 'local';
+  const url = isLocal ? chatMode.url : '';
   const [inputUrl, setInputUrl] = useState(url);
 
   useEffect(() => {
-    setInputUrl(url);
-  }, [url]);
+    if (isLocal) {
+      setInputUrl(chatMode.url);
+    }
+  }, [isLocal, chatMode]);
+
+  if (!isLocal) return null;
+
+  const { status, model, models, error } = chatMode;
 
   const handleTest = () => {
     setLocalServerUrl(inputUrl);

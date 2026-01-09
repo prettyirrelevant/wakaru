@@ -111,7 +111,7 @@ export class SterlingParser extends BaseParser {
 
     let match;
     while ((match = txPattern.exec(cleanText)) !== null) {
-      const [, transDate, narrationRaw, _valueDate, debit, credit, balance] = match;
+      const [, transDate, narrationRaw, , debit, credit, balance] = match;
 
       const narration = narrationRaw
         .replace(/\s+[A-Z][A-Z\s]+[A-Z]\s+Ref:\s*\S+\s*$/, '')
@@ -156,7 +156,7 @@ export class SterlingParser extends BaseParser {
     return `${day}-${month}-${year}`;
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 6) return null;
 
     const dateStr = row[0]?.toString().trim() || '';

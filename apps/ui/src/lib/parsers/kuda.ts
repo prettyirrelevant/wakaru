@@ -16,7 +16,7 @@ export class KudaParser extends BaseParser {
     super(logger);
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     // Skip empty rows or rows that are too short
     if (!row || row.length < 6) return null;
 

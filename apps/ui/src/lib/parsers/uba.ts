@@ -85,7 +85,7 @@ export class UbaParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow, _rowIndex: number): Transaction | null {
+  parseTransaction(row: RawRow): Transaction | null {
     if (!row || row.length < 6) return null;
 
     const transDateStr = row[0]?.toString().trim() || '';

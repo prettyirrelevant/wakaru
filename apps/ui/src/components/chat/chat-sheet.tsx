@@ -71,6 +71,7 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
 
   const transport = useMemo(
     () => createChatTransport(chatMode, executeLocalQuery),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [chatMode, db]
   );
 
