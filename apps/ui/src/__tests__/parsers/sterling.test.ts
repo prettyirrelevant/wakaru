@@ -319,7 +319,7 @@ describe('SterlingParser', () => {
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
-    it('stores reference as sessionId', () => {
+    it("uses the bank's own reference rather than a synthesised one", () => {
       const row = [
         '01-01-2025',
         '1234567890',
@@ -330,7 +330,7 @@ describe('SterlingParser', () => {
       ];
 
       const result = parser.parseTransaction(row);
-      expect(result!.meta?.sessionId).toBe('1234567890');
+      expect(result!.reference).toBe('1234567890');
     });
 
     it('generates unique IDs', () => {

@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -109,8 +109,7 @@ export class SterlingParser extends BaseParser {
 
     const txPattern = /(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+\.\d{2})/g;
 
-    let match;
-    while ((match = txPattern.exec(cleanText)) !== null) {
+    for (const match of cleanText.matchAll(txPattern)) {
       const [, transDate, narrationRaw, , debit, credit, balance] = match;
 
       const narration = narrationRaw
@@ -156,7 +155,7 @@ export class SterlingParser extends BaseParser {
     return `${day}-${month}-${year}`;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 6) return null;
 
     const dateStr = row[0]?.toString().trim() || '';
@@ -187,15 +186,12 @@ export class SterlingParser extends BaseParser {
       }
     }
 
-    if (reference) {
-      meta.sessionId = reference;
-    }
-
     return this.createTransaction({
       date,
       amount,
       description: narration || 'Transaction',
-      reference: this.generateReference(date, narration, 15),
+      // Sterling prints a real reference; prefer it over a synthesised one.
+      reference: reference || this.generateReference(date, narration, 15),
       meta,
     });
   }

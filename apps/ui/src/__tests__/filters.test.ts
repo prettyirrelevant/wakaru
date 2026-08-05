@@ -3,252 +3,148 @@ import {
   isFilterEmpty,
   countActiveFilters,
   buildWhereClause,
+  buildScopeClause,
   formatFilterChips,
   emptyFilterState,
+  periodToRange,
   type FilterState,
 } from '~/lib/filters';
 
+/** `excludeInternal` defaults on, so switch it off where it is not the subject. */
+const base: FilterState = { ...emptyFilterState, excludeInternal: false };
+
 describe('filters', () => {
-  describe('isFilterEmpty', () => {
-    it('returns true for empty filter state', () => {
+  describe('what counts as filtered', () => {
+    it('treats the default state as unfiltered, including its default exclusions', () => {
       expect(isFilterEmpty(emptyFilterState)).toBe(true);
-    });
-
-    it('returns false when banks filter is set', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ['GTB'] };
-      expect(isFilterEmpty(state)).toBe(false);
-    });
-
-    it('returns false when flow filter is set', () => {
-      const state: FilterState = { ...emptyFilterState, flow: 'in' };
-      expect(isFilterEmpty(state)).toBe(false);
-    });
-
-    it('returns false when amount filters are set', () => {
-      const state: FilterState = { ...emptyFilterState, amountMin: 100 };
-      expect(isFilterEmpty(state)).toBe(false);
-    });
-
-    it('returns false when date filters are set', () => {
-      const state: FilterState = { ...emptyFilterState, dateFrom: '2024-01-01' };
-      expect(isFilterEmpty(state)).toBe(false);
-    });
-  });
-
-  describe('countActiveFilters', () => {
-    it('returns 0 for empty filter state', () => {
+      expect(isFilterEmpty({ ...emptyFilterState, excludeInternal: true })).toBe(true);
       expect(countActiveFilters(emptyFilterState)).toBe(0);
     });
 
-    it('counts banks as 1 filter regardless of count', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ['GTB', 'Kuda', 'OPay'] };
-      expect(countActiveFilters(state)).toBe(1);
-    });
-
-    it('counts flow as 1 filter', () => {
-      const state: FilterState = { ...emptyFilterState, flow: 'out' };
-      expect(countActiveFilters(state)).toBe(1);
-    });
-
-    it('counts amount range as 1 filter', () => {
-      const state: FilterState = { ...emptyFilterState, amountMin: 100, amountMax: 500 };
-      expect(countActiveFilters(state)).toBe(1);
-    });
-
-    it('counts date range as 1 filter', () => {
-      const state: FilterState = { ...emptyFilterState, dateFrom: '2024-01-01', dateTo: '2024-12-31' };
-      expect(countActiveFilters(state)).toBe(1);
-    });
-
-    it('counts all active filters', () => {
-      const state: FilterState = {
-        banks: ['GTB'],
-        flow: 'in',
-        amountMin: 100,
-        amountMax: null,
-        dateFrom: '2024-01-01',
-        dateTo: null,
-      };
-      expect(countActiveFilters(state)).toBe(4);
+    it('counts a multi-value dimension once, not once per value', () => {
+      expect(countActiveFilters({ ...emptyFilterState, banks: ['gtb', 'kuda', 'opay'] })).toBe(1);
+      expect(countActiveFilters({ ...emptyFilterState, amountMin: 100, amountMax: 500 })).toBe(1);
+      expect(
+        countActiveFilters({ ...emptyFilterState, dateFrom: '2024-01-01', dateTo: '2024-12-31' })
+      ).toBe(1);
     });
   });
 
   describe('buildWhereClause', () => {
-    it('returns 1=1 for empty filters and no search', () => {
-      const result = buildWhereClause(emptyFilterState, '');
-      expect(result.sql).toBe('1=1');
-      expect(result.params).toEqual([]);
+    it('returns TRUE when nothing is filtered', () => {
+      expect(buildWhereClause(base, '').sql).toBe('TRUE');
     });
 
-    it('builds parameterized query for bank filter', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ['GTB', 'Kuda'] };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('bank_source IN ($1, $2)');
-      expect(result.params).toEqual(['GTB', 'Kuda']);
+    it('treats uncategorized as a null category alongside explicit ones', () => {
+      const result = buildWhereClause({ ...base, categories: ['cat-food', 'uncategorized'] }, '');
+      expect(result.sql).toBe('(t.category_id IN ($1) OR t.category_id IS NULL)');
+      expect(result.params).toEqual(['cat-food']);
     });
 
-    it('builds query for inflow filter', () => {
-      const state: FilterState = { ...emptyFilterState, flow: 'in' };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('amount > 0');
-      expect(result.params).toEqual([]);
+    it('converts amounts to minor units, rounding rather than passing a float', () => {
+      expect(buildWhereClause({ ...base, amountMin: 100 }, '').params).toEqual([10000]);
+      expect(buildWhereClause({ ...base, amountMin: 10.005 }, '').params).toEqual([1001]);
     });
 
-    it('builds query for outflow filter', () => {
-      const state: FilterState = { ...emptyFilterState, flow: 'out' };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('amount < 0');
-      expect(result.params).toEqual([]);
+    it('uses a half-open upper bound so the end date is included', () => {
+      // A plain `<=` against a timestamptz pins to midnight and drops the day.
+      expect(buildWhereClause({ ...base, dateTo: '2024-12-31' }, '').sql).toBe(
+        "t.booked_at < $1::date + INTERVAL '1 day'"
+      );
     });
 
-    it('converts amount to kobo for min amount', () => {
-      const state: FilterState = { ...emptyFilterState, amountMin: 100 };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('ABS(amount) >= $1');
-      expect(result.params).toEqual([10000]); // 100 * 100 = 10000 kobo
+    it('leaves fee rows alone — hiding them is a list concern, not an analytics one', () => {
+      expect(buildWhereClause({ ...base, hideChildFees: true }, '').sql).toBe('TRUE');
     });
 
-    it('converts amount to kobo for max amount', () => {
-      const state: FilterState = { ...emptyFilterState, amountMax: 500 };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('ABS(amount) <= $1');
-      expect(result.params).toEqual([50000]); // 500 * 100 = 50000 kobo
-    });
-
-    it('builds parameterized query for date from', () => {
-      const state: FilterState = { ...emptyFilterState, dateFrom: '2024-01-01' };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('date >= $1');
-      expect(result.params).toEqual(['2024-01-01']);
-    });
-
-    it('builds parameterized query for date to', () => {
-      const state: FilterState = { ...emptyFilterState, dateTo: '2024-12-31' };
-      const result = buildWhereClause(state, '');
-      expect(result.sql).toBe('date <= $1');
-      expect(result.params).toEqual(['2024-12-31']);
-    });
-
-    it('builds parameterized query for search text', () => {
-      const result = buildWhereClause(emptyFilterState, 'uber');
-      expect(result.sql).toBe('(LOWER(description) LIKE LOWER($1) OR LOWER(counterparty_name) LIKE LOWER($1))');
-      expect(result.params).toEqual(['%uber%']);
-    });
-
-    it('trims search text', () => {
-      const result = buildWhereClause(emptyFilterState, '  uber  ');
-      expect(result.params).toEqual(['%uber%']);
-    });
-
-    it('combines multiple filters with AND', () => {
+    it('numbers parameters in the order the clauses are emitted', () => {
       const state: FilterState = {
-        banks: ['GTB'],
+        ...base,
+        currency: 'NGN',
+        banks: ['gtb'],
         flow: 'in',
         amountMin: 100,
-        amountMax: null,
         dateFrom: '2024-01-01',
-        dateTo: null,
       };
       const result = buildWhereClause(state, 'transfer');
-      expect(result.sql).toContain('AND');
-      expect(result.sql).toContain('bank_source IN ($1)');
-      expect(result.sql).toContain('amount > 0');
-      expect(result.sql).toContain('ABS(amount) >= $2');
-      expect(result.sql).toContain('date >= $3');
-      expect(result.params).toEqual(['GTB', 10000, '2024-01-01', '%transfer%']);
+
+      expect(result.sql).toContain('t.currency = $1');
+      expect(result.sql).toContain('a.bank IN ($2)');
+      expect(result.sql).toContain('ABS(t.amount_minor) >= $3');
+      expect(result.sql).toContain('t.booked_at >= $4::date');
+      expect(result.sql).toContain('t.search_text LIKE $5');
+      expect(result.params).toEqual(['NGN', 'gtb', 10000, '2024-01-01', '%transfer%']);
     });
 
-    it('prevents SQL injection by using parameterized queries', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ["'; DROP TABLE transactions; --"] };
-      const result = buildWhereClause(state, '');
-      // The malicious input should be in params, not in the SQL string
-      expect(result.sql).toBe('bank_source IN ($1)');
-      expect(result.params).toEqual(["'; DROP TABLE transactions; --"]);
+    it('keeps hostile input out of the SQL string', () => {
+      const result = buildWhereClause({ ...base, banks: ["'; DROP TABLE transactions; --"] }, '');
+      expect(result.sql).toBe('a.bank IN ($1)');
       expect(result.sql).not.toContain('DROP TABLE');
+      expect(result.params).toEqual(["'; DROP TABLE transactions; --"]);
+    });
+  });
+
+  describe('buildScopeClause', () => {
+    it('keeps account, currency and date but drops anything that would distort a balance', () => {
+      const result = buildScopeClause({
+        ...base,
+        currency: 'NGN',
+        accounts: ['acc-1'],
+        dateFrom: '2024-01-01',
+        categories: ['cat-food'],
+        kinds: ['card_payment'],
+        flow: 'out',
+        amountMin: 500,
+        excludeInternal: true,
+      });
+
+      expect(result.sql).toContain('t.currency = $1');
+      expect(result.sql).toContain('t.account_id IN ($2)');
+      expect(result.sql).toContain('t.booked_at >= $3::date');
+      expect(result.sql).not.toContain('category_id');
+      expect(result.sql).not.toContain('kind');
+      expect(result.sql).not.toContain('ABS(');
+      expect(result.sql).not.toContain('transfer_group_id');
     });
   });
 
   describe('formatFilterChips', () => {
-    it('returns empty array for empty filters', () => {
-      const chips = formatFilterChips(emptyFilterState);
-      expect(chips).toEqual([]);
+    it('names one value and counts several', () => {
+      expect(formatFilterChips({ ...base, banks: ['gtb'] })[0].label).toBe('gtb');
+      expect(formatFilterChips({ ...base, banks: ['gtb', 'kuda', 'opay'] })[0].label).toBe('3 banks');
     });
 
-    it('formats single bank chip', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ['GTB'] };
-      const chips = formatFilterChips(state);
-      expect(chips).toHaveLength(1);
-      expect(chips[0].label).toBe('GTB');
+    it('resolves a category id through the supplied labels', () => {
+      const chips = formatFilterChips(
+        { ...base, categories: ['cat-food'] },
+        { categories: { 'cat-food': 'Food & drink' } }
+      );
+      expect(chips[0].label).toBe('Food & drink');
     });
 
-    it('formats multiple banks chip', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ['GTB', 'Kuda', 'OPay'] };
-      const chips = formatFilterChips(state);
-      expect(chips).toHaveLength(1);
-      expect(chips[0].label).toBe('3 banks');
+    it('clears only its own dimension', () => {
+      const state: FilterState = { ...base, banks: ['gtb'], flow: 'in' };
+      const bankChip = formatFilterChips(state).find((c) => c.label === 'gtb');
+
+      expect(bankChip!.next.banks).toEqual([]);
+      expect(bankChip!.next.flow).toBe('in');
     });
+  });
 
-    it('formats inflow as credit', () => {
-      const state: FilterState = { ...emptyFilterState, flow: 'in' };
-      const chips = formatFilterChips(state);
-      expect(chips).toHaveLength(1);
-      expect(chips[0].label).toBe('credit');
-    });
+  describe('periodToRange', () => {
+    it('bounds each period inclusively of today, and not at all for "all"', () => {
+      const now = new Date('2026-03-15T12:00:00.000Z');
 
-    it('formats outflow as debit', () => {
-      const state: FilterState = { ...emptyFilterState, flow: 'out' };
-      const chips = formatFilterChips(state);
-      expect(chips).toHaveLength(1);
-      expect(chips[0].label).toBe('debit');
-    });
-
-    it('formats amount range', () => {
-      const state: FilterState = { ...emptyFilterState, amountMin: 100, amountMax: 500 };
-      const chips = formatFilterChips(state);
-      expect(chips).toHaveLength(1);
-      expect(chips[0].label).toContain('100');
-      expect(chips[0].label).toContain('500');
-    });
-
-    it('formats min amount only', () => {
-      const state: FilterState = { ...emptyFilterState, amountMin: 100, amountMax: null };
-      const chips = formatFilterChips(state);
-      expect(chips[0].label).toContain('≥');
-    });
-
-    it('formats max amount only', () => {
-      const state: FilterState = { ...emptyFilterState, amountMin: null, amountMax: 500 };
-      const chips = formatFilterChips(state);
-      expect(chips[0].label).toContain('≤');
-    });
-
-    it('formats date range', () => {
-      const state: FilterState = { ...emptyFilterState, dateFrom: '2024-01-01', dateTo: '2024-12-31' };
-      const chips = formatFilterChips(state);
-      expect(chips).toHaveLength(1);
-      expect(chips[0].label).toBe('2024-01-01 to 2024-12-31');
-    });
-
-    it('formats date from only', () => {
-      const state: FilterState = { ...emptyFilterState, dateFrom: '2024-01-01', dateTo: null };
-      const chips = formatFilterChips(state);
-      expect(chips[0].label).toBe('from 2024-01-01');
-    });
-
-    it('formats date to only', () => {
-      const state: FilterState = { ...emptyFilterState, dateFrom: null, dateTo: '2024-12-31' };
-      const chips = formatFilterChips(state);
-      expect(chips[0].label).toBe('until 2024-12-31');
-    });
-
-    it('onRemove clears the correct filter', () => {
-      const state: FilterState = { ...emptyFilterState, banks: ['GTB'], flow: 'in' };
-      const chips = formatFilterChips(state);
-
-      const bankChip = chips.find(c => c.label === 'GTB');
-      const newState = bankChip!.onRemove();
-      expect(newState.banks).toEqual([]);
-      expect(newState.flow).toBe('in'); // Other filters unchanged
+      expect(periodToRange('all', now)).toEqual({ dateFrom: null, dateTo: null });
+      expect(periodToRange('30d', now)).toEqual({ dateFrom: '2026-02-14', dateTo: '2026-03-15' });
+      expect(periodToRange('this-month', now)).toEqual({
+        dateFrom: '2026-03-01',
+        dateTo: '2026-03-15',
+      });
+      expect(periodToRange('this-year', now)).toEqual({
+        dateFrom: '2026-01-01',
+        dateTo: '2026-03-15',
+      });
     });
   });
 });

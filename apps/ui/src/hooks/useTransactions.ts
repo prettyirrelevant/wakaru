@@ -1,105 +1,156 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useLiveQuery } from '@electric-sql/pglite-react';
-import type { Transaction, TransactionMeta } from '~/types';
-import { type FilterState, emptyFilterState, buildWhereClause } from '~/lib/filters';
+import type { BankType, CategorySource, CurrencyCode, LedgerTransaction, TransactionType } from '~/types';
+import { type FilterState, emptyFilterState } from '~/lib/filters';
+import { transactionCountQuery, transactionPageQuery } from '~/lib/queries/analytics';
 
 export type SortField = 'date' | 'amount';
 export type SortOrder = 'asc' | 'desc';
 
+export const PAGE_SIZE = 25;
+
 export interface TransactionRow {
   id: string;
-  date: Date;
-  created_at: string;
+  account_id: string;
+  import_id: string;
+  booked_at: Date;
+  value_at: Date | null;
+  seq: number;
+  amount_minor: string;
+  currency: string;
+  balance_after_minor: string | null;
   description: string;
-  amount: number;
-  category: string;
-  bank_source: string;
-  reference: string;
-  counterparty_name: string | null;
-  counterparty_account: string | null;
-  counterparty_bank: string | null;
-  transaction_type: string | null;
-  bill_type: string | null;
-  bill_provider: string | null;
-  bill_token: string | null;
   narration: string | null;
-  session_id: string | null;
-  raw_category: string | null;
-  balance_after: number | null;
+  reference: string;
+  counterparty_id: string | null;
+  kind: string;
+  category_id: string | null;
+  category_source: string | null;
+  parent_transaction_id: string | null;
+  transfer_group_id: string | null;
+  counterparty_name: string | null;
+  category_name: string | null;
+  account_bank: string;
+  account_number_masked: string;
+  account_name: string;
 }
 
-export function mapRowToTransaction(row: TransactionRow): Transaction {
+export function mapRowToTransaction(row: TransactionRow): LedgerTransaction {
   return {
     id: row.id,
-    date: row.date.toISOString(),
-    createdAt: Number(row.created_at),
+    accountId: row.account_id,
+    importId: row.import_id,
+    bookedAt: row.booked_at.toISOString(),
+    valueAt: row.value_at?.toISOString() ?? null,
+    seq: Number(row.seq),
+    amountMinor: Number(row.amount_minor),
+    currency: row.currency as CurrencyCode,
+    balanceAfterMinor: row.balance_after_minor === null ? null : Number(row.balance_after_minor),
     description: row.description,
-    amount: row.amount,
-    category: row.category as Transaction['category'],
-    bankSource: row.bank_source as Transaction['bankSource'],
+    narration: row.narration,
     reference: row.reference,
-    meta: {
-      counterpartyName: row.counterparty_name ?? undefined,
-      counterpartyAccount: row.counterparty_account ?? undefined,
-      counterpartyBank: row.counterparty_bank ?? undefined,
-      type: row.transaction_type as TransactionMeta['type'],
-      billType: row.bill_type ?? undefined,
-      billProvider: row.bill_provider ?? undefined,
-      billToken: row.bill_token ?? undefined,
-      narration: row.narration ?? undefined,
-      sessionId: row.session_id ?? undefined,
-      rawCategory: row.raw_category ?? undefined,
-      balanceAfter: row.balance_after ?? undefined,
-    },
+    counterpartyId: row.counterparty_id,
+    kind: row.kind as TransactionType,
+    categoryId: row.category_id,
+    categorySource: row.category_source as CategorySource | null,
+    parentTransactionId: row.parent_transaction_id,
+    transferGroupId: row.transfer_group_id,
+    counterpartyName: row.counterparty_name,
+    categoryName: row.category_name,
+    accountBank: row.account_bank as BankType,
+    accountLabel: accountLabel(row),
   };
 }
 
+function accountLabel(row: TransactionRow): string {
+  if (row.account_name) return row.account_name;
+  if (row.account_number_masked) return `${row.account_bank} ${row.account_number_masked}`;
+  return row.account_bank;
+}
+
+/**
+ * Paged transaction list.
+ *
+ * Ordering and pagination happen in SQL — the previous version pulled every
+ * matching row into memory and sliced it, which meant a full table read on
+ * every keystroke in the search box.
+ */
 export function useTransactions() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(emptyFilterState);
+  const [page, setPage] = useState(1);
 
-  const { query, params } = useMemo(() => {
-    const orderByColumn = sortField === 'amount' ? 'ABS(amount)' : 'date';
-    const orderDir = sortOrder === 'desc' ? 'DESC' : 'ASC';
-    const whereClause = buildWhereClause(filters, searchQuery);
-
-    return {
-      query: `SELECT * FROM transactions WHERE ${whereClause.sql} ORDER BY ${orderByColumn} ${orderDir}`,
-      params: whereClause.params,
-    };
-  }, [sortField, sortOrder, searchQuery, filters]);
-
-  const result = useLiveQuery<TransactionRow>(query, params);
-  
-  const transactions = useMemo(
-    () => (result?.rows ?? []).map(mapRowToTransaction),
-    [result?.rows]
+  const pageQuery = useMemo(
+    () =>
+      transactionPageQuery(filters, searchQuery, {
+        sortField,
+        sortOrder,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+      }),
+    [filters, searchQuery, sortField, sortOrder, page]
   );
 
-  const toggleSort = useCallback((field: SortField) => {
-    if (field === sortField) {
-      setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
-  }, [sortField]);
+  const countQuery = useMemo(
+    () => transactionCountQuery(filters, searchQuery),
+    [filters, searchQuery]
+  );
+
+  const pageResult = useLiveQuery<TransactionRow>(pageQuery.sql, pageQuery.params);
+  const countResult = useLiveQuery<{ count: string }>(countQuery.sql, countQuery.params);
+
+  const transactions = useMemo(
+    () => (pageResult?.rows ?? []).map(mapRowToTransaction),
+    [pageResult?.rows]
+  );
+
+  const total = Number(countResult?.rows?.[0]?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const applyFilters = useCallback((next: FilterState) => {
+    setFilters(next);
+    setPage(1);
+  }, []);
+
+  const applySearch = useCallback((next: string) => {
+    setSearchQuery(next);
+    setPage(1);
+  }, []);
+
+  const toggleSort = useCallback(
+    (field: SortField) => {
+      if (field === sortField) {
+        setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+      } else {
+        setSortField(field);
+        setSortOrder('desc');
+      }
+      setPage(1);
+    },
+    [sortField]
+  );
 
   const clearFilters = useCallback(() => {
     setFilters(emptyFilterState);
+    setPage(1);
   }, []);
 
   return {
     transactions,
+    total,
+    page,
+    totalPages,
+    setPage,
     sortField,
     sortOrder,
     searchQuery,
-    setSearchQuery,
+    setSearchQuery: applySearch,
     filters,
-    setFilters,
+    setFilters: applyFilters,
     clearFilters,
     toggleSort,
+    isLoading: pageResult === undefined,
   };
 }

@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -155,7 +155,7 @@ export class GtbParser extends BaseParser {
     return { branchCode, branchName: '', remarks: afterCode };
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 7) return null;
 
     const transDateStr = row[0]?.toString().trim() || '';
@@ -187,7 +187,10 @@ export class GtbParser extends BaseParser {
     }
 
     if (valueDateStr) {
-      meta.sessionId = valueDateStr;
+      const valueDate = this.parseDDMMMYYYY(valueDateStr);
+      if (valueDate) {
+        meta.valueDate = valueDate.toISOString();
+      }
     }
 
     return this.createTransaction({

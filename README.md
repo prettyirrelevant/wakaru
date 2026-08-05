@@ -12,13 +12,15 @@ wakaru is a bank statement analyzer that runs entirely in your browser. upload y
 
 most finance apps want your bank login or upload your data to their servers. wakaru doesn't.
 
-your statement is parsed and stored locally in your browser. when you use the ai chat, we run your query locally and only send the results to generate a response. we see what you ask about, not your full statement.
+your statement is parsed and stored locally in your browser. when you use the ai chat, the model writes a query, your browser runs it against your own data, and only the rows that answer the question are sent back. we see what you ask about and the answer, never your full statement. you can also point it at a local model and send nothing at all.
 
 ## features
 
 - **local parsing**: drop your bank statement, get instant insights
-- **visual analytics**: see inflows, outflows, and trends at a glance
-- **ai chat**: ask questions like "how much did i spend on food in december?"
+- **balance checked**: we walk your statement's own running balance and tell you if it doesn't add up, so a misread row doesn't quietly skew your totals
+- **multiple accounts**: each statement belongs to an account, and money moved between your own accounts stops counting as spending
+- **real insights**: where it went by category, who you pay most, what recurs monthly, and what your bank charged you
+- **ai chat**: ask questions like "how much did i spend on food in december?" — via our proxy, or your own local model
 - **export**: take your parsed data anywhere
 
 ## supported banks
@@ -50,6 +52,7 @@ pnpm dev
 
 - react + typescript
 - pglite (postgres in wasm) for in-browser storage and queries
+- cloudflare workers ai for the hosted chat proxy, or any openai-compatible local server
 - tailwind with a terminal-inspired ui
 
 ## license

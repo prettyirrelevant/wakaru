@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -16,7 +16,7 @@ export class KudaParser extends BaseParser {
     super(logger);
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     // Skip empty rows or rows that are too short
     if (!row || row.length < 6) return null;
 
@@ -95,7 +95,7 @@ export class KudaParser extends BaseParser {
       parseInt(second, 10)
     );
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private generateKudaReference(

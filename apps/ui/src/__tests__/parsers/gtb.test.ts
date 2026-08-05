@@ -273,7 +273,7 @@ describe('GtbParser', () => {
       expect(result!.meta?.balanceAfter).toBe(10100000); // 101,000 * 100
     });
 
-    it('stores value date as sessionId', () => {
+    it('stores the value date separately from the transaction date', () => {
       const row = [
         '15-Nov-2025',
         '16-Nov-2025',
@@ -285,7 +285,8 @@ describe('GtbParser', () => {
       ];
 
       const result = parser.parseTransaction(row);
-      expect(result!.meta?.sessionId).toBe('16-Nov-2025');
+      expect(result!.date).toBe('2025-11-15T00:00:00.000Z');
+      expect(result!.meta?.valueDate).toBe('2025-11-16T00:00:00.000Z');
     });
 
     it('generates unique IDs for different transactions', () => {

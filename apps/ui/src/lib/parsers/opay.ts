@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -21,7 +21,7 @@ export class OPayParser extends BaseParser {
     super(logger);
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 5) return null;
 
     // [DateTime, Date, Description, Debit, Credit, Balance, Channel, Reference]
@@ -82,7 +82,7 @@ export class OPayParser extends BaseParser {
       parseInt(second, 10)
     );
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private parseAmount(debit?: string, credit?: string): number | null {

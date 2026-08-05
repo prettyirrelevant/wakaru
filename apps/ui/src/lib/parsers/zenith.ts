@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -27,8 +27,7 @@ export class ZenithParser extends BaseParser {
     const txPattern =
       /(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{1,3}(?:,\d{3})*\.\d{2})/g;
 
-    let match;
-    while ((match = txPattern.exec(cleanText)) !== null) {
+    for (const match of cleanText.matchAll(txPattern)) {
       const [, date, description, debit, credit, valueDate, balance] = match;
 
       if (
@@ -45,7 +44,7 @@ export class ZenithParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 4) return null;
 
     const dateStr = row[0]?.toString().trim() || '';

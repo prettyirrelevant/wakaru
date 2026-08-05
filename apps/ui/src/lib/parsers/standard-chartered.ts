@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -114,7 +114,7 @@ export class StandardCharteredParser extends BaseParser {
     ]);
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 5) return null;
 
     const dateStr = row[0]?.toString().trim() || '';
@@ -158,7 +158,7 @@ export class StandardCharteredParser extends BaseParser {
     if (month === undefined) return null;
 
     const date = new Date(Date.UTC(parseInt(year, 10), month, parseInt(day, 10), 0, 0, 0, 0));
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private parseAmount(amountStr: string, isCredit: boolean): number | null {

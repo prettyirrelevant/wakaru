@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -27,8 +27,7 @@ export class AccessParser extends BaseParser {
       'gi'
     );
 
-    let match;
-    while ((match = txPattern.exec(text)) !== null) {
+    for (const match of text.matchAll(txPattern)) {
       const [, postedDate, valueDate, description, debit, credit, balance] = match;
 
       if (
@@ -53,7 +52,7 @@ export class AccessParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 6) return null;
 
     const postedDateStr = row[0]?.toString().trim() || '';
@@ -83,7 +82,10 @@ export class AccessParser extends BaseParser {
     }
 
     if (valueDateStr) {
-      meta.sessionId = valueDateStr;
+      const valueDate = this.parseDate(valueDateStr);
+      if (valueDate) {
+        meta.valueDate = valueDate.toISOString();
+      }
     }
 
     return this.createTransaction({
@@ -106,7 +108,7 @@ export class AccessParser extends BaseParser {
     const fullYear = 2000 + parseInt(year, 10);
     const date = new Date(Date.UTC(fullYear, month, parseInt(day, 10), 0, 0, 0, 0));
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private extractCounterparty(description: string): Partial<TransactionMeta> {

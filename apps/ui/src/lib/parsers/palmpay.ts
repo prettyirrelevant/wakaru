@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -107,7 +107,7 @@ export class PalmPayParser extends BaseParser {
     return true;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 3) return null;
 
     const { date, description, amountStr, transactionId } = this.extractRowData(row);
@@ -208,7 +208,7 @@ export class PalmPayParser extends BaseParser {
       parseInt(second, 10)
     );
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private parseSignedAmount(amountStr: string): number | null {
@@ -216,7 +216,7 @@ export class PalmPayParser extends BaseParser {
     const cleaned = amountStr.replace(/[+\-₦$,\s]/g, '').trim();
 
     const amount = parseFloat(cleaned);
-    if (isNaN(amount)) return null;
+    if (Number.isNaN(amount)) return null;
 
     const amountInKobo = Math.round(amount * 100);
     return isNegative ? -amountInKobo : amountInKobo;

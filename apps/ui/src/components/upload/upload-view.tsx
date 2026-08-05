@@ -1,245 +1,92 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import * as Comlink from 'comlink';
-import { useTransactionStore } from '~/stores/transactions';
+import { useState } from 'react';
 import { DropZone } from './drop-zone';
 import { BankPicker } from './bank-picker';
+import { CurrencyPicker } from './currency-picker';
+import { PasswordPrompt } from './password-prompt';
+import { ImportResult } from './import-result';
 import { Progress } from '~/components/ui';
 import { SettingsSheet } from '~/components/settings/settings-sheet';
-import { SUPPORTED_BANKS } from '~/lib/constants';
-import type { BankType, Transaction } from '~/types';
-
-interface ParserApi {
-  parseFile(
-    fileBuffer: ArrayBuffer,
-    fileName: string,
-    bankType: BankType,
-    password: string | undefined,
-    onProgress: (progress: number, message: string) => void
-  ): Promise<{ transactions: Transaction[]; error?: string }>;
-}
+import { useStatementUpload } from '~/hooks/useStatementUpload';
 
 export function UploadView() {
-  const [selectedBank, setSelectedBank] = useState<BankType | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [password, setPassword] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-
-  const workerRef = useRef<Worker | null>(null);
-  const apiRef = useRef<Comlink.Remote<ParserApi> | null>(null);
-
-  const status = useTransactionStore((s) => s.status);
-  const setStatus = useTransactionStore((s) => s.setStatus);
-  const addParsedTransactions = useTransactionStore((s) => s.addParsedTransactions);
-
-  const selectedBankInfo = useMemo(
-    () => SUPPORTED_BANKS.find((b) => b.id === selectedBank),
-    [selectedBank]
-  );
-
-  useEffect(() => {
-    setPendingFile(null);
-    setPassword('');
-    setPasswordError(null);
-  }, [selectedBank]);
-
-  useEffect(() => {
-    workerRef.current = new Worker(
-      new URL('../../workers/parser.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    apiRef.current = Comlink.wrap<ParserApi>(workerRef.current);
-
-    return () => {
-      workerRef.current?.terminate();
-    };
-  }, []);
-
-  const processFile = useCallback(
-    async (file: File, filePassword?: string) => {
-      if (!selectedBank || !apiRef.current) return;
-
-      setPasswordError(null);
-      setStatus({ stage: 'parsing', progress: 0, message: 'reading file...' });
-
-      try {
-        const buffer = await file.arrayBuffer();
-
-        const result = await apiRef.current.parseFile(
-          buffer,
-          file.name,
-          selectedBank,
-          filePassword,
-          Comlink.proxy((progress: number, message: string) => {
-            setStatus({ stage: 'parsing', progress, message: message.toLowerCase() });
-          })
-        );
-
-        if (result.error) {
-          const isPasswordError = result.error.toLowerCase().includes('password') || 
-                                  result.error.toLowerCase().includes('decrypt') ||
-                                  result.error.toLowerCase().includes('encrypted');
-          
-          if (isPasswordError) {
-            setPendingFile(file);
-            setPasswordError(filePassword ? 'incorrect password, please try again' : null);
-            setStatus({ stage: 'idle' });
-          } else {
-            setStatus({ stage: 'error', message: result.error });
-            setPendingFile(null);
-          }
-          return;
-        }
-
-        setPendingFile(null);
-        setPassword('');
-        await addParsedTransactions(result.transactions as Transaction[]);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'failed to process file';
-        const isPasswordError = errorMessage.toLowerCase().includes('password') || 
-                                errorMessage.toLowerCase().includes('decrypt') ||
-                                errorMessage.toLowerCase().includes('encrypted');
-        
-        if (isPasswordError) {
-          setPendingFile(file);
-          setPasswordError(filePassword ? 'incorrect password, please try again' : null);
-          setStatus({ stage: 'idle' });
-        } else {
-          setStatus({ stage: 'error', message: errorMessage });
-          setPendingFile(null);
-        }
-      }
-    },
-    [selectedBank, setStatus, addParsedTransactions]
-  );
-
-  const handleFileSelect = useCallback(
-    async (file: File) => {
-      if (!selectedBank) return;
-      await processFile(file);
-    },
-    [selectedBank, processFile]
-  );
-
-  const handleUnlock = useCallback(async () => {
-    if (!pendingFile || !password) return;
-    await processFile(pendingFile, password);
-  }, [pendingFile, password, processFile]);
-
-  const handleCancelPending = useCallback(() => {
-    setPendingFile(null);
-    setPassword('');
-    setPasswordError(null);
-  }, []);
-
-  const handleFileError = useCallback((message: string) => {
-    setStatus({ stage: 'error', message });
-  }, [setStatus]);
-
-  const isProcessing = status.stage === 'parsing';
+  const upload = useStatementUpload();
 
   return (
     <div className="flex min-h-screen flex-col px-4 py-6">
       <header className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
-        </div>
+        <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
         <button
           onClick={() => setIsSettingsOpen(true)}
-          className="tui-btn-ghost text-xs px-2 py-1"
+          className="tui-btn-ghost px-2 py-1 text-xs"
           aria-label="Settings"
         >
           [cfg]
         </button>
       </header>
 
-      {isProcessing && (
-        <div className="mt-4 tui-box p-3 space-y-2">
+      {upload.isProcessing && upload.status.stage === 'parsing' && (
+        <div className="tui-box mt-4 space-y-2 p-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{status.message}</span>
-            <span className="mono-nums">{status.progress}%</span>
+            <span className="text-muted-foreground">{upload.status.message}</span>
+            <span className="mono-nums">{upload.status.progress}%</span>
           </div>
-          <Progress value={status.progress} />
+          <Progress value={upload.status.progress} />
         </div>
       )}
 
-      {status.stage === 'error' && (
-        <div className="mt-4 tui-box border-destructive/30 bg-destructive-muted p-3 text-xs text-destructive">
-          <span className="text-muted-foreground mr-2">err:</span>
-          {status.message}
+      {upload.status.stage === 'error' && (
+        <div
+          role="alert"
+          className="tui-box mt-4 border-destructive/30 bg-destructive-muted p-3 text-xs text-destructive"
+        >
+          <span className="mr-2 text-muted-foreground">err:</span>
+          {upload.status.message}
         </div>
+      )}
+
+      {upload.status.stage === 'complete' && (
+        <ImportResult summary={upload.status.summary} className="mt-4" />
       )}
 
       <div className="mt-8 flex flex-1 flex-col items-center justify-center gap-8">
-        <div className="text-center space-y-2">
-          <p className="text-sm text-muted-foreground">
-            know where your money went
-          </p>
+        <div className="space-y-2 text-center">
+          <p className="text-sm text-muted-foreground">know where your money went</p>
           <p className="text-xs text-muted-foreground/70">
             your bank statement never leaves your device
           </p>
         </div>
 
-        {pendingFile ? (
-          <div className="w-full max-w-sm tui-box p-4 space-y-4">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">selected file</p>
-              <p className="text-sm truncate">{pendingFile.name}</p>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">
-                this pdf is password protected
-              </label>
-              <input
-                type="password"
-                placeholder="enter password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setPasswordError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && password) {
-                    handleUnlock();
-                  }
-                }}
-                className="w-full border border-border bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
-                autoFocus
-              />
-              {passwordError && (
-                <p className="text-xs text-destructive">{passwordError}</p>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleCancelPending}
-                className="flex-1 border border-border px-3 py-2 text-xs hover:bg-muted"
-              >
-                cancel
-              </button>
-              <button
-                onClick={handleUnlock}
-                disabled={!password || isProcessing}
-                className="flex-1 bg-accent text-accent-foreground px-3 py-2 text-xs disabled:opacity-50"
-              >
-                unlock
-              </button>
-            </div>
-          </div>
+        {upload.pendingFile ? (
+          <PasswordPrompt
+            fileName={upload.pendingFile.name}
+            password={upload.password}
+            onPasswordChange={upload.setPassword}
+            error={upload.passwordError}
+            onUnlock={upload.unlock}
+            onCancel={upload.cancelPending}
+            disabled={upload.isProcessing}
+          />
         ) : (
           <DropZone
-            onFileSelect={handleFileSelect}
-            onError={handleFileError}
-            disabled={isProcessing || !selectedBank}
-            fileFormat={selectedBankInfo?.fileFormat}
+            onFileSelect={upload.selectFile}
+            onError={upload.fail}
+            disabled={upload.isProcessing || !upload.selectedBank}
+            fileFormat={upload.selectedBankInfo?.fileFormat}
           />
         )}
 
-        <BankPicker selectedBank={selectedBank} onSelectBank={setSelectedBank} />
+        <div className="w-full max-w-sm space-y-3">
+          <BankPicker selectedBank={upload.selectedBank} onSelectBank={upload.setSelectedBank} />
+          {upload.selectedBank && (
+            <CurrencyPicker value={upload.currency} onChange={upload.setCurrency} />
+          )}
+          {upload.currencyWarning && (
+            <p className="text-xs text-warning">{upload.currencyWarning}</p>
+          )}
+        </div>
 
-        {!selectedBank && (
+        {!upload.selectedBank && (
           <p className="text-center text-xs text-muted-foreground">
             <span className="text-accent">hint:</span> select your bank first
           </p>
@@ -260,10 +107,7 @@ export function UploadView() {
         </p>
       </footer>
 
-      <SettingsSheet
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      <SettingsSheet isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }
