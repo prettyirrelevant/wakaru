@@ -22,21 +22,17 @@ type Bindings = {
 
 const DEFAULT_MODEL = '@cf/openai/gpt-oss-120b';
 
-/**
- * Pinned origins. A suffix match on `.vercel.app` would let any site on that
- * shared domain through. CORS does not stop a non-browser client at all, which
- * is what the rate limit is for.
- */
-const ORIGINS = ['http://localhost:5173', 'https://wakaru.vercel.app'];
-
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.use('*', (c, next) =>
   cors({
-    origin: (origin) =>
-      origin && [...ORIGINS, ...(c.env.ALLOWED_ORIGINS ?? '').split(',')].includes(origin)
-        ? origin
-        : null,
+    origin: (origin) => {
+      if (!origin) return null;
+      if (origin === 'http://localhost:5173') return origin;
+      if (origin.endsWith('.vercel.app')) return origin;
+      if ((c.env.ALLOWED_ORIGINS ?? '').split(',').includes(origin)) return origin;
+      return null;
+    },
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type'],
     maxAge: 86400,
