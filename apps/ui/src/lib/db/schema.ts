@@ -59,6 +59,7 @@ export const SCHEMA = `
     pattern     TEXT NOT NULL,
     category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     priority    INTEGER NOT NULL DEFAULT 100,
+    source      TEXT NOT NULL DEFAULT 'user',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
@@ -146,32 +147,103 @@ export const SYSTEM_CATEGORIES: { id: string; name: string; parent?: string }[] 
   { id: 'cat-uncategorized', name: 'Uncategorized' },
 ];
 
-/**
- * Seed rules. Deliberately conservative — a wrong category is worse than none,
- * because the user has to notice it to correct it.
- */
-export const SEED_RULES: {
+export interface SeedRule {
   id: string;
-  matchField: 'description' | 'counterparty' | 'kind';
+  matchField: 'description' | 'counterparty' | 'kind' | 'any';
   matchType: 'contains' | 'equals';
   pattern: string;
   categoryId: string;
   priority: number;
-}[] = [
+}
+
+/**
+ * Seed rules. Deliberately conservative — a wrong category is worse than none,
+ * because the user has to notice it to correct it.
+ *
+ * Merchant names match on `any` (description or counterparty): the same
+ * purchase reads "POS/WEB PURCHASE ... SHOPRITE" in one statement and carries
+ * "SHOPRITE LEKKI" as a counterparty in another. Kinds are the only exact
+ * matches. Substrings that collide with ordinary words (glo, mtn, mrs, hm)
+ * are excluded on purpose.
+ */
+function merchant(id: string, pattern: string, categoryId: string, priority = 50): SeedRule {
+  return { id, matchField: 'any', matchType: 'contains', pattern, categoryId, priority };
+}
+
+export const SEED_RULES: SeedRule[] = [
   { id: 'rule-kind-fee', matchField: 'kind', matchType: 'equals', pattern: 'bank_charge', categoryId: 'cat-fees', priority: 10 },
   { id: 'rule-kind-atm', matchField: 'kind', matchType: 'equals', pattern: 'atm_withdrawal', categoryId: 'cat-cash', priority: 10 },
   { id: 'rule-kind-airtime', matchField: 'kind', matchType: 'equals', pattern: 'airtime', categoryId: 'cat-bills-data', priority: 10 },
+  { id: 'rule-kind-reversal', matchField: 'kind', matchType: 'equals', pattern: 'reversal', categoryId: 'cat-income-refund', priority: 10 },
 
-  { id: 'rule-uber', matchField: 'description', matchType: 'contains', pattern: 'uber', categoryId: 'cat-transport-ride', priority: 50 },
-  { id: 'rule-bolt', matchField: 'description', matchType: 'contains', pattern: 'bolt', categoryId: 'cat-transport-ride', priority: 50 },
-  { id: 'rule-netflix', matchField: 'description', matchType: 'contains', pattern: 'netflix', categoryId: 'cat-bills-tv', priority: 50 },
-  { id: 'rule-spotify', matchField: 'description', matchType: 'contains', pattern: 'spotify', categoryId: 'cat-entertainment', priority: 50 },
-  { id: 'rule-dstv', matchField: 'description', matchType: 'contains', pattern: 'dstv', categoryId: 'cat-bills-tv', priority: 50 },
-  { id: 'rule-gotv', matchField: 'description', matchType: 'contains', pattern: 'gotv', categoryId: 'cat-bills-tv', priority: 50 },
-  { id: 'rule-ikedc', matchField: 'description', matchType: 'contains', pattern: 'ikedc', categoryId: 'cat-bills-power', priority: 50 },
-  { id: 'rule-ekedc', matchField: 'description', matchType: 'contains', pattern: 'ekedc', categoryId: 'cat-bills-power', priority: 50 },
-  { id: 'rule-salary', matchField: 'description', matchType: 'contains', pattern: 'salary', categoryId: 'cat-income-salary', priority: 40 },
-  { id: 'rule-jumia', matchField: 'description', matchType: 'contains', pattern: 'jumia', categoryId: 'cat-shopping', priority: 50 },
-  { id: 'rule-shoprite', matchField: 'description', matchType: 'contains', pattern: 'shoprite', categoryId: 'cat-food-groceries', priority: 50 },
-  { id: 'rule-chicken-republic', matchField: 'description', matchType: 'contains', pattern: 'chicken republic', categoryId: 'cat-food-eating-out', priority: 50 },
+  merchant('rule-salary', 'salary', 'cat-income-salary', 30),
+  merchant('rule-wages', 'wages', 'cat-income-salary', 30),
+  merchant('rule-payroll', 'payroll', 'cat-income-salary', 30),
+  merchant('rule-refund', 'refund', 'cat-income-refund', 40),
+
+  merchant('rule-uber', 'uber', 'cat-transport-ride'),
+  merchant('rule-bolt', 'bolt', 'cat-transport-ride'),
+  merchant('rule-indriver', 'indriver', 'cat-transport-ride'),
+  merchant('rule-gokada', 'gokada', 'cat-transport-ride'),
+
+  merchant('rule-nnpc', 'nnpc', 'cat-transport-fuel'),
+  merchant('rule-oando', 'oando', 'cat-transport-fuel'),
+  merchant('rule-conoil', 'conoil', 'cat-transport-fuel'),
+
+  merchant('rule-shoprite', 'shoprite', 'cat-food-groceries'),
+  merchant('rule-spar', 'spar', 'cat-food-groceries'),
+  merchant('rule-justrite', 'justrite', 'cat-food-groceries'),
+  merchant('rule-hubmart', 'hubmart', 'cat-food-groceries'),
+  merchant('rule-prince-ebeano', 'prince ebeano', 'cat-food-groceries'),
+
+  merchant('rule-chicken-republic', 'chicken republic', 'cat-food-eating-out'),
+  merchant('rule-kfc', 'kfc', 'cat-food-eating-out'),
+  merchant('rule-dominos', 'dominos', 'cat-food-eating-out'),
+  merchant('rule-pizza-hut', 'pizza hut', 'cat-food-eating-out'),
+  merchant('rule-mr-biggs', "mr bigg's", 'cat-food-eating-out'),
+  merchant('rule-tantalizers', 'tantalizers', 'cat-food-eating-out'),
+  merchant('rule-sweet-sensation', 'sweet sensation', 'cat-food-eating-out'),
+  merchant('rule-cold-stone', 'cold stone', 'cat-food-eating-out'),
+  merchant('rule-burger-king', 'burger king', 'cat-food-eating-out'),
+
+  merchant('rule-ikedc', 'ikedc', 'cat-bills-power'),
+  merchant('rule-ekedc', 'ekedc', 'cat-bills-power'),
+  merchant('rule-aedc', 'aedc', 'cat-bills-power'),
+  merchant('rule-ibedc', 'ibedc', 'cat-bills-power'),
+  merchant('rule-phedc', 'phedc', 'cat-bills-power'),
+  merchant('rule-eedc', 'eedc', 'cat-bills-power'),
+  merchant('rule-bedc', 'bedc', 'cat-bills-power'),
+  merchant('rule-kaedco', 'kaedco', 'cat-bills-power'),
+  merchant('rule-kedco', 'kedco', 'cat-bills-power'),
+  merchant('rule-yedc', 'yedc', 'cat-bills-power'),
+
+  merchant('rule-dstv', 'dstv', 'cat-bills-tv'),
+  merchant('rule-gotv', 'gotv', 'cat-bills-tv'),
+  merchant('rule-startimes', 'startimes', 'cat-bills-tv'),
+  merchant('rule-showmax', 'showmax', 'cat-bills-tv'),
+  merchant('rule-netflix', 'netflix', 'cat-bills-tv'),
+  merchant('rule-amazon-prime', 'amazon prime', 'cat-bills-tv', 45),
+  merchant('rule-youtube', 'youtube', 'cat-bills-tv'),
+
+  merchant('rule-spotify', 'spotify', 'cat-entertainment'),
+  merchant('rule-deezer', 'deezer', 'cat-entertainment'),
+  merchant('rule-boomplay', 'boomplay', 'cat-entertainment'),
+
+  merchant('rule-jumia', 'jumia', 'cat-shopping'),
+  merchant('rule-konga', 'konga', 'cat-shopping'),
+  merchant('rule-amazon', 'amazon', 'cat-shopping'),
+  merchant('rule-shein', 'shein', 'cat-shopping'),
+  merchant('rule-temu', 'temu', 'cat-shopping'),
+  merchant('rule-aliexpress', 'aliexpress', 'cat-shopping'),
+  merchant('rule-adidas', 'adidas', 'cat-shopping'),
+  merchant('rule-nike', 'nike', 'cat-shopping'),
+  merchant('rule-zara', 'zara', 'cat-shopping'),
+
+  merchant('rule-healthplus', 'healthplus', 'cat-health'),
+  merchant('rule-medplus', 'medplus', 'cat-health'),
+  merchant('rule-famasi', 'famasi', 'cat-health'),
+  merchant('rule-alpha-pharmacy', 'alpha pharmacy', 'cat-health'),
+  merchant('rule-lagoon-hospital', 'lagoon hospital', 'cat-health'),
+  merchant('rule-avon-hmo', 'avon hmo', 'cat-health'),
+  merchant('rule-hygeia', 'hygeia', 'cat-health'),
 ];

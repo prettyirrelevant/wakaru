@@ -12,6 +12,8 @@ import { SUPPORTED_BANKS } from '~/lib/constants';
 import { accountCurrenciesForBank } from '~/lib/db';
 import { hashBytes } from '~/lib/utils/hash';
 import { ingestParsedStatement } from '~/lib/ledger/ingest';
+import { runSuggestionPass } from '~/lib/ledger/suggested-rules';
+import { useSettingsStore } from '~/stores/settings';
 import { PARSER_VERSION } from '~/workers/parser-version';
 
 interface ParserApi {
@@ -161,6 +163,27 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
         setPendingFile(null);
         setPassword('');
         setStatus({ stage: 'complete', summary });
+
+        // The suggestion pass is best-effort and never blocks or fails the
+        // import. It inherits the chat-mode choice: off, or a local model,
+        // or the cloud proxy the user already opted into.
+        if (summary.inserted > 0) {
+          const chatMode = useSettingsStore.getState().chatMode;
+          if (
+            chatMode.type === 'cloud' ||
+            (chatMode.type === 'local' && chatMode.status === 'connected')
+          ) {
+            try {
+              const suggestions = await runSuggestionPass(db, chatMode);
+              if (suggestions && suggestions.rules > 0) {
+                setStatus({ stage: 'complete', summary, suggestions });
+              }
+            } catch {
+              // suggestions failed; the import stands on its own
+            }
+          }
+        }
+
         onComplete?.(summary);
       } catch (error) {
         setPendingFile(null);

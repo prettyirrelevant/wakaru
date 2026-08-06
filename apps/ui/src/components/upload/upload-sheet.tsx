@@ -50,7 +50,10 @@ export function UploadSheet({ isOpen, onClose }: UploadSheetProps) {
 
         {upload.status.stage === 'complete' && (
           <div className="mb-4 space-y-3">
-            <ImportResult summary={upload.status.summary} />
+            <ImportResult
+              summary={upload.status.summary}
+              suggestions={upload.status.suggestions}
+            />
             <button
               onClick={onClose}
               className="tui-btn-primary w-full px-3 py-2 text-xs"

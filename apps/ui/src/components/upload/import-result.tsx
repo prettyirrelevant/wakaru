@@ -1,8 +1,9 @@
-import type { ImportSummary } from '~/types';
+import type { ImportSummary, SuggestedRulesOutcome } from '~/types';
 import { cn } from '~/lib/utils';
 
 interface ImportResultProps {
   summary: ImportSummary;
+  suggestions?: SuggestedRulesOutcome;
   className?: string;
 }
 
@@ -13,7 +14,7 @@ interface ImportResultProps {
  * where a third of the rows failed looked exactly like a clean one. Both the
  * parse rate and the statement's own balance check are shown here.
  */
-export function ImportResult({ summary, className }: ImportResultProps) {
+export function ImportResult({ summary, suggestions, className }: ImportResultProps) {
   const { reconcile } = summary;
   const skipped = Math.max(0, summary.rowsSeen - summary.rowsParsed);
 
@@ -47,6 +48,15 @@ export function ImportResult({ summary, className }: ImportResultProps) {
         )}
         <Row label="balance check" value={reconcileLabel(reconcile.ok, reconcile.checked, reconcile.breaks.length)} />
       </dl>
+
+      {suggestions && suggestions.rules > 0 && (
+        <p className="text-muted-foreground">
+          ai suggested {suggestions.rules} categor
+          {suggestions.rules === 1 ? 'y rule' : 'y rules'} covering{' '}
+          {suggestions.rows} transaction{suggestions.rows === 1 ? '' : 's'} — review
+          in settings
+        </p>
+      )}
 
       {reconcile.ok === false && (
         <p className="text-warning/90">

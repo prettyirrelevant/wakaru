@@ -44,6 +44,31 @@ describe('applyRules', () => {
     expect(result?.categoryId).toBe('cat-groceries');
   });
 
+  it('matches on either field with any', () => {
+    const rules = [rule({ id: 'r1', matchField: 'any', pattern: 'shoprite', categoryId: 'cat-groceries' })];
+
+    const fromCounterparty = applyRules(rules, {
+      description: 'POS PURCHASE',
+      counterpartyName: 'SHOPRITE LEKKI',
+      kind: 'card_payment',
+    });
+    expect(fromCounterparty?.categoryId).toBe('cat-groceries');
+
+    const fromDescription = applyRules(rules, {
+      description: 'POS/WEB PURCHASE 4567**1234 SHOPRITE LEKKI',
+      counterpartyName: null,
+      kind: 'card_payment',
+    });
+    expect(fromDescription?.categoryId).toBe('cat-groceries');
+  });
+
+  it('ignores a completely empty any field', () => {
+    const rules = [rule({ id: 'r1', matchField: 'any', pattern: 'shoprite', categoryId: 'cat-groceries' })];
+    expect(
+      applyRules(rules, { description: '', counterpartyName: null, kind: 'card_payment' })
+    ).toBeNull();
+  });
+
   it('takes the first match in the order given', () => {
     const rules = sortRules([
       rule({ id: 'general', pattern: 'uber', categoryId: 'cat-transport', priority: 90 }),

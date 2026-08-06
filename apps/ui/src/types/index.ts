@@ -143,7 +143,14 @@ export interface Category {
 
 export type CategorySource = 'parser' | 'rule' | 'user';
 
-export type RuleMatchField = 'description' | 'counterparty' | 'kind';
+/**
+ * Where a rule came from. `suggested` rules are AI guesses awaiting review;
+ * they stay inert to nothing — they apply — but the UI can list and reject
+ * them in bulk.
+ */
+export type RuleSource = 'system' | 'user' | 'suggested';
+
+export type RuleMatchField = 'description' | 'counterparty' | 'kind' | 'any';
 export type RuleMatchType = 'contains' | 'equals' | 'regex';
 
 export interface Rule {
@@ -153,6 +160,7 @@ export interface Rule {
   pattern: string;
   categoryId: string;
   priority: number;
+  source?: RuleSource;
 }
 
 /** A stored ledger row. */
@@ -248,8 +256,14 @@ export interface ParseOutput {
 export type ProcessingStatus =
   | { stage: 'idle' }
   | { stage: 'parsing'; progress: number; message: string }
-  | { stage: 'complete'; summary: ImportSummary }
+  | { stage: 'complete'; summary: ImportSummary; suggestions?: SuggestedRulesOutcome }
   | { stage: 'error'; message: string };
+
+/** Result of one AI categorisation pass over an import. */
+export interface SuggestedRulesOutcome {
+  rules: number;
+  rows: number;
+}
 
 // ---------------------------------------------------------------------------
 // Settings / chat

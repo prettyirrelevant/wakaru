@@ -46,7 +46,11 @@ export function UploadView() {
       )}
 
       {upload.status.stage === 'complete' && (
-        <ImportResult summary={upload.status.summary} className="mt-4" />
+        <ImportResult
+          summary={upload.status.summary}
+          suggestions={upload.status.suggestions}
+          className="mt-4"
+        />
       )}
 
       <div className="mt-8 flex flex-1 flex-col items-center justify-center gap-8">

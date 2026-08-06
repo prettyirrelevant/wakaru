@@ -2,8 +2,6 @@ import type { QueryOutput } from '~/lib/db';
 import { UnsafeSqlError } from '~/lib/db/readonly-sql';
 import type { ChatMode } from '~/types';
 
-export const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
-
 export function formatValue(col: string, value: unknown): string {
   if (value === null || value === undefined) return 'none';
 

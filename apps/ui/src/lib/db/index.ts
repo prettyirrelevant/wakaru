@@ -9,6 +9,7 @@ import type {
   Rule,
   RuleMatchField,
   RuleMatchType,
+  RuleSource,
   TransactionType,
   CategorySource,
 } from '~/types';
@@ -38,6 +39,10 @@ export async function initDb(): Promise<DbInstance> {
 
   const db = await createDb();
   await db.exec(SCHEMA);
+
+  // The rules table predates the `source` column; CREATE TABLE IF NOT EXISTS
+  // will not add it to an existing database, so migrate in place.
+  await db.query(`ALTER TABLE rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user'`);
 
   // Substring search wants a trigram index. pg_trgm is a contrib module and
   // is not in every PGlite build; without it the search still works, just
@@ -74,8 +79,8 @@ export async function seedReferenceData(db: Queryable): Promise<void> {
 
   for (const rule of SEED_RULES) {
     await db.query(
-      `INSERT INTO rules (id, match_field, match_type, pattern, category_id, priority)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO rules (id, match_field, match_type, pattern, category_id, priority, source)
+       VALUES ($1, $2, $3, $4, $5, $6, 'system')
        ON CONFLICT (id) DO NOTHING`,
       [rule.id, rule.matchField, rule.matchType, rule.pattern, rule.categoryId, rule.priority]
     );
@@ -423,6 +428,7 @@ interface RuleRow {
   pattern: string;
   category_id: string;
   priority: number;
+  source: string;
 }
 
 export async function listRules(db: Queryable): Promise<Rule[]> {
@@ -434,18 +440,28 @@ export async function listRules(db: Queryable): Promise<Rule[]> {
     pattern: row.pattern,
     categoryId: row.category_id,
     priority: Number(row.priority),
+    source: row.source as RuleSource | undefined,
   }));
 }
 
 export async function createRule(db: Queryable, rule: Omit<Rule, 'id'>): Promise<string> {
   const id = `rule-user-${hashParts(rule.matchField, rule.matchType, rule.pattern, rule.categoryId)}`;
   await db.query(
-    `INSERT INTO rules (id, match_field, match_type, pattern, category_id, priority)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO rules (id, match_field, match_type, pattern, category_id, priority, source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (id) DO UPDATE SET category_id = EXCLUDED.category_id`,
-    [id, rule.matchField, rule.matchType, rule.pattern, rule.categoryId, rule.priority]
+    [id, rule.matchField, rule.matchType, rule.pattern, rule.categoryId, rule.priority, rule.source ?? 'user']
   );
   return id;
+}
+
+export async function deleteRule(db: Queryable, ruleId: string): Promise<void> {
+  await db.query('DELETE FROM rules WHERE id = $1', [ruleId]);
+}
+
+export async function listCategories(db: Queryable): Promise<{ id: string; name: string }[]> {
+  const result = await db.query<{ id: string; name: string }>('SELECT id, name FROM categories');
+  return result.rows;
 }
 
 /**

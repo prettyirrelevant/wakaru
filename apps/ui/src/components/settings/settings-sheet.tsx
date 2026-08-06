@@ -5,6 +5,7 @@ import { exportTransactionsToCSV, downloadCSV } from '~/lib/csv';
 import { clearAllData, deleteImport } from '~/lib/db';
 import { useSettingsStore } from '~/stores/settings';
 import { LocalServerConfig } from './local-server-section';
+import { SuggestedRulesPanel } from './suggested-rules';
 import { formatMonthRange } from '~/lib/utils';
 import type { Theme } from '~/types';
 
@@ -95,6 +96,10 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           )}
 
           {chatMode.type === 'local' && <LocalServerConfig />}
+
+          <div className="tui-divider my-4" />
+
+          <SuggestedRulesPanel />
         </section>
 
         <div className="tui-divider my-4" />

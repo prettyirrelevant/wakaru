@@ -19,6 +19,10 @@ function fieldValue(tx: Categorizable, field: Rule['matchField']): string {
       return tx.counterpartyName ?? '';
     case 'kind':
       return tx.kind ?? '';
+    case 'any':
+      // A merchant's name may sit in either field depending on the bank, so
+      // `any` rules test the union of the two.
+      return [tx.description, tx.counterpartyName].filter(Boolean).join(' ');
   }
 }
 
