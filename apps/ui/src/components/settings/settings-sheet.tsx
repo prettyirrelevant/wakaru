@@ -97,8 +97,6 @@ export function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
           {chatMode.type === 'local' && <LocalServerConfig />}
 
-          <div className="tui-divider my-4" />
-
           <SuggestedRulesPanel />
         </section>
 

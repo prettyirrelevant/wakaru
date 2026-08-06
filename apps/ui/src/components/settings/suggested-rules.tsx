@@ -42,7 +42,9 @@ export function SuggestedRulesPanel() {
   };
 
   return (
-    <section className="space-y-2">
+    <>
+      <div className="tui-divider my-4" />
+      <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           ai suggested categories for {rules.length} merchant
@@ -105,6 +107,7 @@ export function SuggestedRulesPanel() {
         never leave your device. rejecting stops that merchant being suggested
         again.
       </p>
-    </section>
+      </section>
+    </>
   );
 }
