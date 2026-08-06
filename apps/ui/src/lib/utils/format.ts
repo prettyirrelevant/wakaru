@@ -1,3 +1,5 @@
+import { CURRENCY_SYMBOL, MINOR_UNITS, type CurrencyCode } from '~/types';
+
 /**
  * Safely extract the index from a regex match.
  * Throws if index is undefined (should never happen for valid matches).
@@ -9,92 +11,85 @@ export function getMatchIndex(match: RegExpMatchArray | RegExpExecArray): number
   return match.index;
 }
 
-/**
- * Format amount in kobo to Naira with currency symbol
- */
-export function formatCurrency(amountInKobo: number): string {
-  const naira = amountInKobo / 100;
+/** Minor units to major units. */
+export function toMajorUnits(amountMinor: number): number {
+  return amountMinor / MINOR_UNITS;
+}
+
+/** Full precision, e.g. ₦1,234.56 */
+export function formatCurrency(amountMinor: number, currency: CurrencyCode = 'NGN'): string {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
-    currency: 'NGN',
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(naira);
+  }).format(toMajorUnits(amountMinor));
 }
 
 /**
- * Format amount in kobo to compact form with smart precision
- * e.g., 1.5M, 234K, 12.5K
+ * Compact form with smart precision, e.g. ₦1.5M, ₦234K, ₦12.5K
  */
-export function formatCompactCurrency(amountInKobo: number): string {
-  const naira = Math.abs(amountInKobo) / 100;
-  
-  if (naira >= 1_000_000_000) {
-    const val = naira / 1_000_000_000;
-    return `₦${val >= 100 ? val.toFixed(0) : val >= 10 ? val.toFixed(1) : val.toFixed(2)}B`;
+export function formatCompactCurrency(amountMinor: number, currency: CurrencyCode = 'NGN'): string {
+  const symbol = CURRENCY_SYMBOL[currency] ?? '';
+  const major = Math.abs(toMajorUnits(amountMinor));
+
+  const precision = (value: number) => (value >= 100 ? 0 : value >= 10 ? 1 : 2);
+
+  if (major >= 1_000_000_000) {
+    const value = major / 1_000_000_000;
+    return `${symbol}${value.toFixed(precision(value))}B`;
   }
-  if (naira >= 1_000_000) {
-    const val = naira / 1_000_000;
-    return `₦${val >= 100 ? val.toFixed(0) : val >= 10 ? val.toFixed(1) : val.toFixed(2)}M`;
+  if (major >= 1_000_000) {
+    const value = major / 1_000_000;
+    return `${symbol}${value.toFixed(precision(value))}M`;
   }
-  if (naira >= 1_000) {
-    const val = naira / 1_000;
-    return `₦${val >= 100 ? val.toFixed(0) : val >= 10 ? val.toFixed(1) : val.toFixed(1)}K`;
+  if (major >= 1_000) {
+    const value = major / 1_000;
+    return `${symbol}${value.toFixed(value >= 100 ? 0 : 1)}K`;
   }
-  return `₦${naira.toFixed(0)}`;
+  return `${symbol}${major.toFixed(0)}`;
 }
 
-/**
- * Millify a number for chart display (no currency symbol)
- */
+/** Millify a number for chart axes (no currency symbol). */
 export function millify(value: number): string {
   const abs = Math.abs(value);
-  
-  if (abs >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(1)}B`;
-  }
-  if (abs >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (abs >= 1_000) {
-    return `${(value / 1_000).toFixed(0)}K`;
-  }
+
+  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
   return value.toFixed(0);
 }
 
-/**
- * Format date as DD/MM/YYYY
- */
+/** DD/MM/YYYY */
 export function formatDate(isoString: string): string {
   const date = new Date(isoString);
   const day = date.getDate().toString().padStart(2, '0');
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
+  return `${day}/${month}/${date.getFullYear()}`;
 }
 
-/**
- * Format date with year for display (short month format)
- */
-export function formatDateWithYear(isoString: string): string {
-  const date = new Date(isoString);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
-/**
- * Format date with time as DD/MM/YYYY HH:MM
- */
+/** DD/MM/YYYY HH:MM */
 export function formatDateTime(isoString: string): string {
   const date = new Date(isoString);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear();
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
+  return `${formatDate(isoString)} ${hours}:${minutes}`;
 }
 
+/** "Mar 2025", or "Mar 2025 - Aug 2025" across a range. */
+export function formatMonthRange(start: Date | string | null, end: Date | string | null): string {
+  if (!start || !end) return '';
 
+  const format = (value: Date | string) =>
+    new Date(value).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' });
+
+  const from = format(start);
+  const to = format(end);
+
+  return from === to ? from : `${from} - ${to}`;
+}
+
+/** Human label for a transaction kind. */
+export function formatKind(kind: string): string {
+  return kind.replace(/_/g, ' ');
+}

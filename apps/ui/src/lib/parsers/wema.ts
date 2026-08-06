@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -65,7 +65,7 @@ export class WemaParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 4) return null;
 
     const date = this.parseDate(row[0]?.toString() || '');
@@ -103,13 +103,13 @@ export class WemaParser extends BaseParser {
     if (month === undefined) return null;
 
     const date = new Date(parseInt(year, 10), month, parseInt(day, 10));
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private parseAmount(amountStr: string, isCredit: boolean): number | null {
     const cleaned = amountStr.replace(/[₦,\s]/g, '').trim();
     const amount = parseFloat(cleaned);
-    if (isNaN(amount)) return null;
+    if (Number.isNaN(amount)) return null;
 
     const amountInKobo = Math.round(amount * 100);
     return isCredit ? amountInKobo : -amountInKobo;

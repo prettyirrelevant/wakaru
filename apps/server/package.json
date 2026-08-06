@@ -9,10 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.2",
     "ai": "^6.0.6",
     "hono": "^4.6.0",
-    "workers-ai-provider": "^3.0.2",
+    "workers-ai-provider": "^3.3.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {

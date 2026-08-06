@@ -1,20 +1,21 @@
+import type { QueryOutput } from '~/lib/db';
+import { UnsafeSqlError } from '~/lib/db/readonly-sql';
 import type { ChatMode } from '~/types';
-
-export const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
 
 export function formatValue(col: string, value: unknown): string {
   if (value === null || value === undefined) return 'none';
 
   const colLower = col.toLowerCase();
-  const isMonetary = colLower.includes('amount') || colLower.includes('total') || colLower.includes('sum');
+  const isMonetary =
+    colLower.includes('amount') || colLower.includes('total') || colLower.includes('sum');
 
   if (isMonetary && typeof value === 'number') {
     return `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   }
 
-  if (colLower.includes('date') && typeof value === 'string') {
-    const date = new Date(value);
-    if (!isNaN(date.getTime())) {
+  if (colLower.includes('date') || colLower.endsWith('_at')) {
+    const date = value instanceof Date ? value : typeof value === 'string' ? new Date(value) : null;
+    if (date && !Number.isNaN(date.getTime())) {
       return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     }
   }
@@ -22,18 +23,30 @@ export function formatValue(col: string, value: unknown): string {
   return String(value);
 }
 
-export function formatResults(columns: string[], rows: unknown[][]): string {
-  if (rows.length === 0) return 'No results found';
+export function formatResults(output: QueryOutput): string {
+  if (output.rows.length === 0) return 'No results found';
 
-  const lines = rows.slice(0, 20).map((row) => {
-    return columns.map((col, i) => `${col}: ${formatValue(col, row[i])}`).join(', ');
-  });
+  const lines = output.rows.map((row) =>
+    output.columns.map((col, i) => `${col}: ${formatValue(col, row[i])}`).join(', ')
+  );
 
-  if (rows.length > 20) {
-    lines.push(`... and ${rows.length - 20} more rows`);
+  if (output.truncated) {
+    lines.push('... more rows were returned than are shown; narrow the query if you need them.');
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Turn a failed query into something the model can act on. A rejected query
+ * should read as a correctable mistake, not as a system error, so the model
+ * retries with a valid SELECT instead of apologising to the user.
+ */
+export function formatQueryError(error: unknown): string {
+  if (error instanceof UnsafeSqlError) {
+    return `Query rejected: ${error.message} Rewrite it as a single read-only SELECT.`;
+  }
+  return `Error executing query: ${error instanceof Error ? error.message : 'Unknown error'}`;
 }
 
 export function getErrorMessage(error: Error | null | undefined, chatMode: ChatMode): string | null {

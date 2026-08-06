@@ -2,10 +2,27 @@ name = "wakaru-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
+# Workers AI. No API key: the binding authenticates the Worker itself.
+[ai]
+binding = "AI"
+
+[vars]
+# Must be a model the catalog marks as function-calling capable.
+AI_MODEL = "@cf/openai/gpt-oss-120b"
+# Extra browser origins allowed to call the API, comma separated.
+ALLOWED_ORIGINS = ""
+
 [[ratelimits]]
 name = "CHAT_RATE_LIMITER"
 namespace_id = "1001"
 simple = { limit = 20, period = 60 }
+
+# One categorize request per import, so it gets its own quota: a user
+# importing several statements must not starve their chat allowance.
+[[ratelimits]]
+name = "CATEGORIZE_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 10, period = 60 }
 
 [observability.logs]
 enabled = true
@@ -15,7 +32,19 @@ invocation_logs = true
 [env.dev]
 name = "wakaru-api-dev"
 
+[env.dev.ai]
+binding = "AI"
+
+[env.dev.vars]
+AI_MODEL = "@cf/openai/gpt-oss-120b"
+ALLOWED_ORIGINS = "http://localhost:5173"
+
 [[env.dev.ratelimits]]
 name = "CHAT_RATE_LIMITER"
 namespace_id = "1002"
 simple = { limit = 10, period = 60 }
+
+[[env.dev.ratelimits]]
+name = "CATEGORIZE_RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 5, period = 60 }

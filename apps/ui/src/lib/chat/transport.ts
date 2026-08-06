@@ -1,8 +1,8 @@
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage, ChatTransport, UIMessageChunk } from 'ai';
 import { LocalServerTransport } from '~/lib/ai/local-server-transport';
+import { PROXY_URL } from '~/lib/constants';
 import type { ChatMode } from '~/types';
-import { PROXY_URL } from './utils';
 
 class BlockedTransport implements ChatTransport<UIMessage> {
   async sendMessages(): Promise<ReadableStream<UIMessageChunk>> {

@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -85,7 +85,7 @@ export class UbaParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 6) return null;
 
     const transDateStr = row[0]?.toString().trim() || '';
@@ -117,7 +117,10 @@ export class UbaParser extends BaseParser {
     }
 
     if (valueDateStr) {
-      meta.sessionId = valueDateStr;
+      const valueDate = this.parseDDMMMYYYY(valueDateStr);
+      if (valueDate) {
+        meta.valueDate = valueDate.toISOString();
+      }
     }
 
     return this.createTransaction({

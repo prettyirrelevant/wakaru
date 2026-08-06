@@ -1,101 +1,93 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from '@electric-sql/pglite-react';
+import type { CurrencyCode } from '~/types';
 import { StatsRow } from './stats-row';
 import { FlowChart } from './flow-chart';
+import { BalanceChart } from './balance-chart';
+import { CategoryBreakdown } from './category-breakdown';
+import { TopCounterparties } from './top-counterparties';
+import { RecurringList } from './recurring-list';
+import { PeriodSelector } from './period-selector';
 import { TransactionList } from './transaction-list';
 import { ChatFab } from '~/components/chat/chat-fab';
 import { ChatSheet } from '~/components/chat/chat-sheet';
 import { SettingsSheet } from '~/components/settings/settings-sheet';
 import { UploadSheet } from '~/components/upload/upload-sheet';
-
-interface StatsRow {
-  total_inflow: string;
-  total_outflow: string;
-  count: string;
-  min_date: Date | null;
-  max_date: Date | null;
-}
-
-interface MonthlyRow {
-  month: string;
-  inflow: string;
-  outflow: string;
-}
-
-const STATS_QUERY = `
-  SELECT 
-    COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as total_inflow,
-    COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as total_outflow,
-    COUNT(*) as count,
-    MIN(date) as min_date,
-    MAX(date) as max_date
-  FROM transactions
-`;
-
-function formatDateRange(minDate: Date | null, maxDate: Date | null): string {
-  if (!minDate || !maxDate) return '';
-  
-  const format = (d: Date) =>
-    d.toLocaleDateString('en-NG', { month: 'short', year: 'numeric' });
-  
-  const start = format(minDate);
-  const end = format(maxDate);
-  
-  return start === end ? start : `${start} - ${end}`;
-}
-
-const MONTHLY_QUERY = `
-  SELECT 
-    TO_CHAR(date, 'YYYY-MM') as month,
-    COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as inflow,
-    COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as outflow
-  FROM transactions
-  GROUP BY TO_CHAR(date, 'YYYY-MM')
-  ORDER BY month ASC
-`;
+import { useTransactions } from '~/hooks/useTransactions';
+import {
+  useBalanceSeries,
+  useCategorySpend,
+  useInternalTransfers,
+  useMonthlyFlow,
+  useRecurringPayments,
+  useSummary,
+  useTopCounterparties,
+} from '~/hooks/useAnalytics';
+import { periodToRange, type PeriodKey } from '~/lib/filters';
+import { formatCompactCurrency, formatMonthRange } from '~/lib/utils';
 
 export function Dashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [period, setPeriod] = useState<PeriodKey>('all');
 
-  const statsResult = useLiveQuery<StatsRow>(STATS_QUERY);
-  const monthlyResult = useLiveQuery<MonthlyRow>(MONTHLY_QUERY);
+  const controller = useTransactions();
+  const { filters, setFilters, searchQuery, setSearchQuery } = controller;
 
-  const stats = statsResult?.rows?.[0];
-  const totalInflow = Number(stats?.total_inflow ?? 0);
-  const totalOutflow = Number(stats?.total_outflow ?? 0);
-  const transactionCount = Number(stats?.count ?? 0);
-  const dateRangeText = formatDateRange(stats?.min_date ?? null, stats?.max_date ?? null);
+  // Pin analytics to one currency. Summing naira and dollars would be
+  // meaningless, so default to whichever the user has most of.
+  const currencyResult = useLiveQuery<{ currency: string; n: string }>(
+    'SELECT currency, COUNT(*) AS n FROM transactions GROUP BY currency ORDER BY n DESC'
+  );
+  const availableCurrencies = useMemo(
+    () => (currencyResult?.rows ?? []).map((r) => r.currency as CurrencyCode),
+    [currencyResult?.rows]
+  );
+  const currency: CurrencyCode = filters.currency ?? availableCurrencies[0] ?? 'NGN';
 
-  const byMonth = (monthlyResult?.rows ?? []).map(row => ({
-    month: row.month,
-    inflow: Number(row.inflow),
-    outflow: Number(row.outflow),
-  }));
+  useEffect(() => {
+    if (!filters.currency && availableCurrencies.length > 0) {
+      setFilters({ ...filters, currency: availableCurrencies[0] });
+    }
+    // Only reacting to the currency list settling after first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableCurrencies]);
 
-  const statusText =
-    transactionCount > 0
-      ? `${transactionCount} transactions`
-      : 'Loading...';
+  const handlePeriodChange = (next: PeriodKey) => {
+    setPeriod(next);
+    const { dateFrom, dateTo } = periodToRange(next);
+    setFilters({ ...filters, dateFrom, dateTo });
+  };
+
+  const summary = useSummary(filters, searchQuery);
+  const internal = useInternalTransfers(filters, searchQuery);
+  const monthly = useMonthlyFlow(filters, searchQuery);
+  const balances = useBalanceSeries(filters, searchQuery);
+  const categories = useCategorySpend(filters, searchQuery);
+  const paidTo = useTopCounterparties(filters, searchQuery, 'out');
+  const receivedFrom = useTopCounterparties(filters, searchQuery, 'in');
+  const recurring = useRecurringPayments(filters, searchQuery);
+
+  const dateRangeText = formatMonthRange(summary.minDate, summary.maxDate);
+  const anySheetOpen = isChatOpen || isSettingsOpen || isUploadOpen;
 
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-border bg-background">
         <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
-          </div>
+          <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsUploadOpen(true)}
-              className="tui-btn-ghost text-xs px-2 py-1"
+              className="tui-btn-ghost px-2 py-1 text-xs"
+              aria-label="Add a statement"
             >
               [add]
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="tui-btn-ghost text-xs px-2 py-1"
+              className="tui-btn-ghost px-2 py-1 text-xs"
               aria-label="Settings"
             >
               [cfg]
@@ -104,47 +96,109 @@ export function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2 border-t border-border px-4 py-2 text-xs text-muted-foreground">
-          <span className="tui-badge mono-nums">{statusText}</span>
+          <span className="tui-badge mono-nums">{summary.count} transactions</span>
           {dateRangeText && (
             <>
-              <span className="text-border-strong">|</span>
+              <span className="text-border-strong" aria-hidden="true">
+                |
+              </span>
               <span>{dateRangeText}</span>
+            </>
+          )}
+          {availableCurrencies.length > 1 && (
+            <>
+              <span className="text-border-strong" aria-hidden="true">
+                |
+              </span>
+              <label className="sr-only" htmlFor="currency-select">
+                Currency
+              </label>
+              <select
+                id="currency-select"
+                value={currency}
+                onChange={(e) => setFilters({ ...filters, currency: e.target.value as CurrencyCode })}
+                className="border border-border bg-background px-1 py-0.5 text-xs focus:border-accent focus:outline-none"
+              >
+                {availableCurrencies.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
             </>
           )}
         </div>
       </header>
 
       <main className="flex-1 space-y-6 px-4 py-6 pb-24">
-        <StatsRow
-          inflow={totalInflow}
-          outflow={totalOutflow}
-          net={totalInflow - totalOutflow}
+        <PeriodSelector value={period} onChange={handlePeriodChange} />
+
+        <div className="space-y-2">
+          <StatsRow
+            inflowMinor={summary.inflowMinor}
+            outflowMinor={summary.outflowMinor}
+            netMinor={summary.netMinor}
+            feesMinor={summary.feesMinor}
+            currency={currency}
+          />
+          {internal.groups > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {filters.excludeInternal ? 'excluding' : 'including'}{' '}
+              <span className="mono-nums text-foreground/80">
+                {formatCompactCurrency(internal.amountMinor, currency)}
+              </span>{' '}
+              moved between your own accounts{' '}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, excludeInternal: !filters.excludeInternal })}
+                className="text-accent underline underline-offset-2 hover:no-underline"
+              >
+                {filters.excludeInternal ? 'include' : 'exclude'}
+              </button>
+            </p>
+          )}
+        </div>
+
+        {monthly.length > 1 && <FlowChart data={monthly} currency={currency} />}
+
+        <BalanceChart data={balances} currency={currency} />
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <CategoryBreakdown
+            data={categories}
+            currency={currency}
+            onSelect={(categoryId) =>
+              setFilters({ ...filters, categories: [categoryId ?? 'uncategorized'] })
+            }
+          />
+          <TopCounterparties
+            outgoing={paidTo}
+            incoming={receivedFrom}
+            currency={currency}
+            onSelect={setSearchQuery}
+          />
+        </div>
+
+        <RecurringList data={recurring} currency={currency} onSelect={setSearchQuery} />
+
+        <TransactionList
+          controller={controller}
+          currency={currency}
+          disableShortcuts={anySheetOpen}
         />
-
-        {byMonth.length > 0 && (
-          <FlowChart data={byMonth} />
-        )}
-
-        <TransactionList disableShortcuts={isChatOpen || isSettingsOpen || isUploadOpen} />
       </main>
 
       <ChatFab onClick={() => setIsChatOpen(true)} />
 
-      <ChatSheet 
-        isOpen={isChatOpen} 
+      <ChatSheet
+        isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      <SettingsSheet
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      <SettingsSheet isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      <UploadSheet
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
-      />
+      <UploadSheet isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
     </div>
   );
 }

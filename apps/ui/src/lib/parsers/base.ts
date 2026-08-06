@@ -1,7 +1,7 @@
 import {
   type BankParser,
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   TransactionCategory,
   TransactionType,
@@ -21,7 +21,7 @@ export interface ParseError {
  * Result of parsing a transaction - either success with data or failure with error
  */
 export type ParseResult =
-  | { success: true; transaction: Transaction }
+  | { success: true; transaction: ParsedTransaction }
   | { success: false; error: ParseError | null };
 
 /**
@@ -82,7 +82,7 @@ export abstract class BaseParser implements BankParser {
   /**
    * Parse a transaction row. Must be implemented by subclasses.
    */
-  abstract parseTransaction(row: RawRow, rowIndex: number): Transaction | null;
+  abstract parseTransaction(row: RawRow, rowIndex: number): ParsedTransaction | null;
 
   /**
    * Parse a transaction with detailed error information.
@@ -150,22 +150,33 @@ export abstract class BaseParser implements BankParser {
   }
 
   /**
-   * Parse an amount string to kobo (integer cents).
+   * Parse an amount string to minor units (kobo).
    * Removes currency symbols, commas, and whitespace.
+   *
+   * A parsed "0.00" is a real zero, not a missing value. That matters for the
+   * balance column, where an account genuinely at zero would otherwise be
+   * read as "no balance given" and break reconciliation.
+   *
    * @param amountStr - Amount string (e.g., "₦1,234.56" or "1234.56")
-   * @returns Amount in kobo, or null if invalid
+   * @returns Amount in minor units, or null when there is no number here
    */
   protected parseAmountValue(amountStr: string | undefined): number | null {
     if (!amountStr || amountStr === '-' || amountStr === '--') return null;
     const cleaned = amountStr.replace(/[₦$,\s]/g, '').trim();
+    if (!cleaned) return null;
     const amount = parseFloat(cleaned);
-    if (isNaN(amount) || amount === 0) return null;
+    if (Number.isNaN(amount)) return null;
     return Math.round(amount * 100);
   }
 
   /**
    * Parse debit/credit columns into a signed amount.
    * Credit = positive (inflow), Debit = negative (outflow).
+   *
+   * Statements that print "0.00" in the unused column are common, so a zero
+   * on one side simply means the other side holds the amount. When both sides
+   * are zero or absent there is no transaction to record.
+   *
    * @param debitStr - Debit column value
    * @param creditStr - Credit column value
    */
@@ -173,8 +184,8 @@ export abstract class BaseParser implements BankParser {
     const credit = this.parseAmountValue(creditStr);
     const debit = this.parseAmountValue(debitStr);
 
-    if (credit && credit > 0) return credit;
-    if (debit && debit > 0) return -debit;
+    if (credit !== null && credit > 0) return credit;
+    if (debit !== null && debit > 0) return -debit;
     return null;
   }
 
@@ -203,11 +214,16 @@ export abstract class BaseParser implements BankParser {
       ? new Date(Date.UTC(parseInt(year, 10), month, parseInt(day, 10), 0, 0, 0, 0))
       : new Date(parseInt(year, 10), month, parseInt(day, 10));
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   /**
    * Parse a date string in DD/MM/YYYY format (e.g., "15/11/2025").
+   *
+   * UTC, matching the other date helpers. Building these in local time made
+   * the same calendar day land on different ISO dates depending on which bank
+   * produced the statement, which shifted transactions between months for
+   * anyone west of UTC.
    */
   protected parseDDMMYYYY(dateStr: string): Date | null {
     const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -215,12 +231,10 @@ export abstract class BaseParser implements BankParser {
 
     const [, day, month, year] = match;
     const date = new Date(
-      parseInt(year, 10),
-      parseInt(month, 10) - 1,
-      parseInt(day, 10)
+      Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 0, 0, 0, 0)
     );
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   /**
@@ -235,7 +249,7 @@ export abstract class BaseParser implements BankParser {
       Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 0, 0, 0, 0)
     );
 
-    return isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   /**
@@ -247,7 +261,7 @@ export abstract class BaseParser implements BankParser {
     description: string;
     reference: string;
     meta?: TransactionMeta;
-  }): Transaction {
+  }): ParsedTransaction {
     return {
       id: this.generateId(params.date, params.amount, params.reference, params.description),
       date: params.date.toISOString(),

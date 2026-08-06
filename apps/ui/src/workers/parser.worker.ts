@@ -15,34 +15,46 @@ import {
   extractRowsFromCsv,
   extractTextFromPdf,
 } from '~/lib/parsers/processors';
-import type { Transaction, RawRow, BankType } from '~/types';
+import { noopLogger } from '~/lib/parsers/base';
+import { PdfPasswordError } from '~/lib/parsers/processors/pdf';
+import type { ParseFailure, ParseOutput, ParsedTransaction, RawRow, BankType } from '~/types';
 
 const CHUNK_SIZE = 1000;
-
-interface ParseResult {
-  transactions: Transaction[];
-  error?: string;
-}
 
 type ProgressCallback = (progress: number, message: string) => void;
 
 const parsers = {
-  access: new AccessParser(),
-  fcmb: new FcmbParser(),
-  gtb: new GtbParser(),
-  kuda: new KudaParser(),
-  opay: new OPayParser(),
-  palmpay: new PalmPayParser(),
-  standardchartered: new StandardCharteredParser(),
-  sterling: new SterlingParser(),
-  uba: new UbaParser(),
-  wema: new WemaParser(),
-  zenith: new ZenithParser(),
+  access: new AccessParser(noopLogger),
+  fcmb: new FcmbParser(noopLogger),
+  gtb: new GtbParser(noopLogger),
+  kuda: new KudaParser(noopLogger),
+  opay: new OPayParser(noopLogger),
+  palmpay: new PalmPayParser(noopLogger),
+  standardchartered: new StandardCharteredParser(noopLogger),
+  sterling: new SterlingParser(noopLogger),
+  uba: new UbaParser(noopLogger),
+  wema: new WemaParser(noopLogger),
+  zenith: new ZenithParser(noopLogger),
 } as const;
 
-function isValidBankType(type: string): type is keyof typeof parsers {
+type SupportedBank = keyof typeof parsers;
+
+function isValidBankType(type: string): type is SupportedBank {
   return type in parsers;
 }
+
+/** PDF banks that hand their text to a parser-specific row extractor. */
+const PDF_EXTRACTORS: Partial<Record<SupportedBank, (text: string) => RawRow[]>> = {
+  access: AccessParser.extractRowsFromPdfText,
+  wema: WemaParser.extractRowsFromPdfText,
+  palmpay: PalmPayParser.extractRowsFromPdfText,
+  zenith: ZenithParser.extractRowsFromPdfText,
+  fcmb: FcmbParser.extractRowsFromPdfText,
+  standardchartered: StandardCharteredParser.extractRowsFromPdfText,
+  gtb: GtbParser.extractRowsFromPdfText,
+  uba: UbaParser.extractRowsFromPdfText,
+  sterling: SterlingParser.extractRowsFromPdfText,
+};
 
 const parserApi = {
   async parseFile(
@@ -51,7 +63,19 @@ const parserApi = {
     bankType: BankType,
     password: string | undefined,
     onProgress: ProgressCallback
-  ): Promise<ParseResult> {
+  ): Promise<ParseOutput> {
+    // Validate before doing any extraction work, so an unsupported bank
+    // reports that rather than a confusing downstream parse failure.
+    if (!isValidBankType(bankType)) {
+      return {
+        transactions: [],
+        rowsSeen: 0,
+        failures: [],
+        error: `Unsupported bank: ${bankType}`,
+        errorCode: 'unsupported_bank',
+      };
+    }
+
     try {
       onProgress(5, 'Reading file...');
 
@@ -63,22 +87,25 @@ const parserApi = {
 
       onProgress(20, `Found ${rows.length} rows...`);
 
-      if (!isValidBankType(bankType)) {
-        return { transactions: [], error: `Unsupported bank: ${bankType}` };
-      }
       const parser = parsers[bankType];
-
-      const transactions: Transaction[] = [];
+      const transactions: ParsedTransaction[] = [];
+      const failures: ParseFailure[] = [];
       const totalRows = rows.length;
 
       for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
         const chunk = rows.slice(i, i + CHUNK_SIZE);
 
         for (let j = 0; j < chunk.length; j++) {
-          const transaction = parser.parseTransaction(chunk[j]);
+          const rowIndex = i + j;
+          const result = parser.parseTransactionSafe(chunk[j], rowIndex);
 
-          if (transaction) {
-            transactions.push(transaction);
+          if (result.success) {
+            transactions.push(result.transaction);
+          } else if (result.error) {
+            // A null error means the row was intentionally skipped (header,
+            // footer, running total). An error object means we tried to read
+            // a transaction and could not — that is worth telling the user.
+            failures.push({ rowIndex, message: result.error.message });
           }
         }
 
@@ -87,79 +114,64 @@ const parserApi = {
       }
 
       if (transactions.length === 0) {
-        return { transactions: [], error: 'No transactions found in file' };
+        return {
+          transactions: [],
+          rowsSeen: totalRows,
+          failures,
+          error: 'No transactions found in file',
+          errorCode: 'no_transactions',
+        };
       }
-
-      transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       onProgress(95, 'Finalizing...');
 
-      return { transactions };
+      // Deliberately unsorted: the ingest layer needs the order the bank
+      // wrote the rows in to assign sequence numbers and to walk the running
+      // balance. Display ordering is a query concern.
+      return { transactions, rowsSeen: totalRows, failures };
     } catch (error) {
+      if (error instanceof PdfPasswordError) {
+        return {
+          transactions: [],
+          rowsSeen: 0,
+          failures: [],
+          error: error.message,
+          errorCode: error.reason === 'required' ? 'password_required' : 'password_incorrect',
+        };
+      }
+
       return {
         transactions: [],
+        rowsSeen: 0,
+        failures: [],
         error: error instanceof Error ? error.message : 'Failed to parse file',
+        errorCode: 'parse_failed',
       };
     }
   },
 };
 
-async function extractRows(buffer: ArrayBuffer, fileName: string, bankType: BankType, password?: string): Promise<RawRow[]> {
-  const ext = fileName.toLowerCase();
-  
-  if (bankType === 'access') {
-    const text = await extractTextFromPdf(buffer);
-    return AccessParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'wema') {
-    const text = await extractTextFromPdf(buffer);
-    return WemaParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'palmpay') {
-    const text = await extractTextFromPdf(buffer);
-    return PalmPayParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'zenith') {
-    const text = await extractTextFromPdf(buffer);
-    return ZenithParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'fcmb') {
-    const text = await extractTextFromPdf(buffer);
-    return FcmbParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'standardchartered') {
+async function extractRows(
+  buffer: ArrayBuffer,
+  fileName: string,
+  bankType: SupportedBank,
+  password?: string
+): Promise<RawRow[]> {
+  const extractor = PDF_EXTRACTORS[bankType];
+  if (extractor) {
     const text = await extractTextFromPdf(buffer, password);
-    return StandardCharteredParser.extractRowsFromPdfText(text);
+    return extractor(text);
   }
-  
-  if (bankType === 'gtb') {
-    const text = await extractTextFromPdf(buffer, password);
-    return GtbParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'uba') {
-    const text = await extractTextFromPdf(buffer, password);
-    return UbaParser.extractRowsFromPdfText(text);
-  }
-  
-  if (bankType === 'sterling') {
-    const text = await extractTextFromPdf(buffer, password);
-    return SterlingParser.extractRowsFromPdfText(text);
-  }
-  
+
   if (bankType === 'opay') {
     return extractRowsFromExcel(buffer, 'Wallet Account Transactions');
   }
-  
+
+  const ext = fileName.toLowerCase();
   if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
     return extractRowsFromExcel(buffer);
   }
-  
+
   return extractRowsFromCsv(buffer);
 }
 

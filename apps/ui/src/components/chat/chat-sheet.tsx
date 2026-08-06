@@ -5,13 +5,13 @@ import type { UIMessage } from 'ai';
 import { usePGlite } from '@electric-sql/pglite-react';
 import { BottomSheet } from '~/components/ui';
 import { useSettingsStore } from '~/stores/settings';
-import { executeQuery } from '~/lib/db';
+import { executeModelQuery } from '~/lib/db';
 import type { ChatMode } from '~/types';
 import { ChatBadge } from './chat-badge';
 import { ChatMessage } from './chat-message';
 import { SuggestedQuestions } from './suggested-questions';
 import { BlockedOverlay } from './blocked-overlay';
-import { formatResults, getErrorMessage, getChatKey } from '~/lib/chat/utils';
+import { formatResults, formatQueryError, getErrorMessage, getChatKey } from '~/lib/chat/utils';
 import { createChatTransport } from '~/lib/chat/transport';
 
 interface ChatSheetProps {
@@ -62,10 +62,9 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
 
   const executeLocalQuery = async (sql: string): Promise<string> => {
     try {
-      const { columns, rows } = await executeQuery(db, sql);
-      return formatResults(columns, rows);
+      return formatResults(await executeModelQuery(db, sql));
     } catch (err) {
-      return `Error executing query: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      return formatQueryError(err);
     }
   };
 
@@ -90,19 +89,19 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
       if (!isCloudMode || toolCall.toolName !== 'queryDatabase') return;
 
       const toolInput = toolCall.input as { sql: string };
-      executeQuery(db, toolInput.sql)
-        .then(({ columns, rows }) => {
+      executeModelQuery(db, toolInput.sql)
+        .then((output) => {
           addToolOutput({
             tool: toolCall.toolName,
             toolCallId: toolCall.toolCallId,
-            output: formatResults(columns, rows),
+            output: formatResults(output),
           });
         })
         .catch((err) => {
           addToolOutput({
             tool: toolCall.toolName,
             toolCallId: toolCall.toolCallId,
-            output: `Error executing query: ${err instanceof Error ? err.message : 'Unknown error'}`,
+            output: formatQueryError(err),
           });
         });
     },

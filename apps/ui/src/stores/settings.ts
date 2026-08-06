@@ -31,7 +31,7 @@ const createDefaultLocalMode = (url?: string, model?: string): LocalChatMode => 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: 'system',
   isInitialized: false,
-  chatMode: { type: 'off' },
+  chatMode: { type: 'cloud' },
 
   init: async () => {
     if (get().isInitialized) return;
@@ -42,7 +42,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const savedUrl = await getSetting<string>(db, 'localServerUrl');
     const savedModel = await getSetting<string>(db, 'localServerModel');
 
-    let chatMode: ChatMode = { type: 'off' };
+    let chatMode: ChatMode = { type: 'cloud' };
 
     if (savedModeType === 'cloud') {
       chatMode = { type: 'cloud' };

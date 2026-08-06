@@ -1,28 +1,38 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import dayjs from 'dayjs';
-import type { Transaction } from '~/types';
-import { TransactionCategory, TransactionType } from '~/types';
-import { formatCurrency, formatDateWithYear } from '~/lib/utils';
+import { useEffect, useRef, useState } from 'react';
+import { useLiveQuery } from '@electric-sql/pglite-react';
+import type { CurrencyCode, LedgerTransaction } from '~/types';
+import { formatCurrency, formatDate, formatDateTime, formatKind } from '~/lib/utils';
 import { cn } from '~/lib/utils';
 import { BottomSheet } from '~/components/ui';
-import { useTransactions } from '~/hooks/useTransactions';
+import { PAGE_SIZE, type useTransactions } from '~/hooks/useTransactions';
 import { FilterPanel } from './filter-panel';
+import { CategoryPicker } from './category-picker';
 import { countActiveFilters, isFilterEmpty, formatFilterChips } from '~/lib/filters';
+import { childFeesQuery } from '~/lib/queries/analytics';
 
-const PAGE_SIZE = 25;
+type TransactionsApi = ReturnType<typeof useTransactions>;
 
 interface TransactionListProps {
+  controller: TransactionsApi;
+  currency: CurrencyCode;
   disableShortcuts?: boolean;
 }
 
-export function TransactionList({ disableShortcuts = false }: TransactionListProps) {
-  const [page, setPage] = useState(1);
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+export function TransactionList({
+  controller,
+  currency,
+  disableShortcuts = false,
+}: TransactionListProps) {
+  const [selectedTx, setSelectedTx] = useState<LedgerTransaction | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {
     transactions,
+    total,
+    page,
+    totalPages,
+    setPage,
     sortField,
     sortOrder,
     searchQuery,
@@ -31,17 +41,23 @@ export function TransactionList({ disableShortcuts = false }: TransactionListPro
     setFilters,
     clearFilters,
     toggleSort,
-  } = useTransactions();
+  } = controller;
 
   const activeFilterCount = countActiveFilters(filters);
   const filterChips = formatFilterChips(filters);
 
   useEffect(() => {
+    if (disableShortcuts) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (disableShortcuts) return;
-      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+      const tag = document.activeElement?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+
+      if (e.key === '/' && !typing) {
         e.preventDefault();
         searchInputRef.current?.focus();
+      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        searchInputRef.current?.blur();
       }
     };
 
@@ -49,79 +65,64 @@ export function TransactionList({ disableShortcuts = false }: TransactionListPro
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [disableShortcuts]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, sortField, sortOrder, filters]);
-
-  const totalPages = Math.ceil(transactions.length / PAGE_SIZE);
-  const paginatedTransactions = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return transactions.slice(start, start + PAGE_SIZE);
-  }, [transactions, page]);
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    setPage(1);
-  };
-
-  const handleToggleSort = (field: 'date' | 'amount') => {
-    toggleSort(field);
-    setPage(1);
-  };
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   return (
-    <div className="space-y-3">
+    <section className="space-y-3" aria-labelledby="transactions-heading">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-xs">$</span>
-          <span className="text-sm font-medium">transactions</span>
+          <span className="text-xs text-muted-foreground">$</span>
+          <h2 id="transactions-heading" className="text-sm font-medium">
+            transactions
+          </h2>
+          {total > 0 && (
+            <span className="mono-nums text-xs text-muted-foreground">
+              {rangeStart}–{rangeEnd} of {total}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1 text-xs">
-          <button
-            onClick={() => handleToggleSort('date')}
-            className={cn(
-              'px-2 py-1 border',
-              sortField === 'date'
-                ? 'bg-accent text-accent-foreground border-accent'
-                : 'border-border hover:border-border-strong'
-            )}
-          >
-            date {sortField === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
-          </button>
-          <button
-            onClick={() => handleToggleSort('amount')}
-            className={cn(
-              'px-2 py-1 border',
-              sortField === 'amount'
-                ? 'bg-accent text-accent-foreground border-accent'
-                : 'border-border hover:border-border-strong'
-            )}
-          >
-            amount {sortField === 'amount' && (sortOrder === 'desc' ? '↓' : '↑')}
-          </button>
+          <SortButton
+            label="date"
+            active={sortField === 'date'}
+            order={sortOrder}
+            onClick={() => toggleSort('date')}
+          />
+          <SortButton
+            label="amount"
+            active={sortField === 'amount'}
+            order={sortOrder}
+            onClick={() => toggleSort('amount')}
+          />
         </div>
       </div>
 
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
+          <span
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+            aria-hidden="true"
+          >
             /
           </span>
           <input
             ref={searchInputRef}
-            type="text"
-            placeholder="uber, spotify, rent..."
+            type="search"
+            aria-label="Search transactions"
+            placeholder="uber, spotify, rent... (press /)"
             value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="tui-input w-full pl-7 text-base"
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="tui-input w-full pl-7 text-base sm:text-sm"
           />
         </div>
         <button
           onClick={() => setShowFilters(!showFilters)}
+          aria-expanded={showFilters}
           className={cn(
-            'px-3 py-2 border text-xs shrink-0',
+            'shrink-0 border px-3 py-2 text-xs',
             showFilters || activeFilterCount > 0
-              ? 'bg-accent text-accent-foreground border-accent'
+              ? 'border-accent bg-accent text-accent-foreground'
               : 'border-border hover:border-border-strong'
           )}
         >
@@ -129,20 +130,21 @@ export function TransactionList({ disableShortcuts = false }: TransactionListPro
         </button>
       </div>
 
-      {showFilters && (
-        <FilterPanel filters={filters} onChange={setFilters} />
-      )}
+      {showFilters && <FilterPanel filters={filters} onChange={setFilters} />}
 
       {!isFilterEmpty(filters) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {filterChips.map((chip, i) => (
             <button
               key={i}
-              onClick={() => setFilters(chip.onRemove())}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20"
+              onClick={() => setFilters(chip.next)}
+              className="inline-flex items-center gap-1 border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] text-accent hover:bg-accent/20"
             >
               {chip.label}
-              <span className="text-accent/70">×</span>
+              <span aria-hidden="true" className="text-accent/70">
+                ×
+              </span>
+              <span className="sr-only">remove filter</span>
             </button>
           ))}
           <button
@@ -155,20 +157,23 @@ export function TransactionList({ disableShortcuts = false }: TransactionListPro
       )}
 
       <div className="tui-box divide-y divide-border">
-        {paginatedTransactions.length === 0 ? (
+        {transactions.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            <p className="text-sm mb-2">¯\_(ツ)_/¯</p>
+            <p className="mb-2 text-sm" aria-hidden="true">
+              ¯\_(ツ)_/¯
+            </p>
             <p className="text-xs">
-              {searchQuery || !isFilterEmpty(filters) 
-                ? 'nothing to see here' 
-                : 'your statement awaits'}
+              {searchQuery || !isFilterEmpty(filters)
+                ? 'nothing matches those filters'
+                : 'no transactions yet'}
             </p>
           </div>
         ) : (
-          paginatedTransactions.map((transaction) => (
+          transactions.map((transaction) => (
             <TransactionRow
               key={transaction.id}
               transaction={transaction}
+              currency={currency}
               onClick={() => setSelectedTx(transaction)}
             />
           ))
@@ -176,158 +181,228 @@ export function TransactionList({ disableShortcuts = false }: TransactionListPro
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs">
+        <nav className="flex items-center justify-between text-xs" aria-label="Pagination">
           <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
             className="tui-btn-ghost px-2 py-1 disabled:opacity-30"
           >
             {'<'} prev
           </button>
-          <span className="text-muted-foreground mono-nums">
+          <span className="mono-nums text-muted-foreground">
             {page}/{totalPages}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
             className="tui-btn-ghost px-2 py-1 disabled:opacity-30"
           >
             next {'>'}
           </button>
-        </div>
+        </nav>
       )}
 
       <TransactionDetailSheet
         transaction={selectedTx}
+        currency={currency}
         onClose={() => setSelectedTx(null)}
       />
-    </div>
+    </section>
+  );
+}
+
+function SortButton({
+  label,
+  active,
+  order,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  order: 'asc' | 'desc';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'border px-2 py-1',
+        active ? 'border-accent bg-accent text-accent-foreground' : 'border-border hover:border-border-strong'
+      )}
+    >
+      {label} {active && (order === 'desc' ? '↓' : '↑')}
+    </button>
   );
 }
 
 interface TransactionRowProps {
-  transaction: Transaction;
+  transaction: LedgerTransaction;
+  currency: CurrencyCode;
   onClick: () => void;
 }
 
-function TransactionRow({ transaction, onClick }: TransactionRowProps) {
-  const isInflow = transaction.category === TransactionCategory.Inflow;
+function TransactionRow({ transaction, currency, onClick }: TransactionRowProps) {
+  const isInflow = transaction.amountMinor > 0;
+  const isInternal = transaction.transferGroupId !== null;
 
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors"
+      className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50"
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">{transaction.description}</p>
-        <p 
-          className="mt-0.5 text-xs text-muted-foreground truncate"
-          title={dayjs(transaction.date).format('DD/MM/YYYY h:mm A')}
-        >
-          {dayjs(transaction.date).format('DD/MM/YYYY')}
-          <span> · {transaction.bankSource}</span>
+        <p className="truncate text-xs font-medium">
+          {transaction.counterpartyName || transaction.description}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          <span title={formatDateTime(transaction.bookedAt)}>{formatDate(transaction.bookedAt)}</span>
+          <span> · {transaction.accountLabel}</span>
+          {transaction.categoryName && <span> · {transaction.categoryName}</span>}
+          {isInternal && <span className="text-accent"> · internal</span>}
         </p>
       </div>
 
       <div
         className={cn(
-          'text-right text-xs font-medium mono-nums shrink-0',
-          isInflow ? 'text-green-500' : 'text-red-500'
+          'mono-nums shrink-0 text-right text-xs font-medium',
+          isInternal ? 'text-muted-foreground' : isInflow ? 'text-success' : 'text-destructive'
         )}
       >
         {isInflow ? '+' : '-'}
-        {formatCurrency(Math.abs(transaction.amount))}
+        {formatCurrency(Math.abs(transaction.amountMinor), transaction.currency ?? currency)}
       </div>
     </button>
   );
 }
 
 interface TransactionDetailSheetProps {
-  transaction: Transaction | null;
+  transaction: LedgerTransaction | null;
+  currency: CurrencyCode;
   onClose: () => void;
 }
 
-function TransactionDetailSheet({ transaction, onClose }: TransactionDetailSheetProps) {
-  if (!transaction) return null;
+function TransactionDetailSheet({ transaction, currency, onClose }: TransactionDetailSheetProps) {
+  return (
+    <BottomSheet isOpen={transaction !== null} onClose={onClose} title="Transaction detail">
+      {transaction && (
+        <TransactionDetail transaction={transaction} currency={currency} onClose={onClose} />
+      )}
+    </BottomSheet>
+  );
+}
 
-  const isInflow = transaction.category === TransactionCategory.Inflow;
-  const meta = transaction.meta;
+function TransactionDetail({
+  transaction,
+  currency,
+}: {
+  transaction: LedgerTransaction;
+  currency: CurrencyCode;
+  onClose: () => void;
+}) {
+  const isInflow = transaction.amountMinor > 0;
+  const txCurrency = transaction.currency ?? currency;
+
+  const feesQuery = childFeesQuery(transaction.id);
+  const feesResult = useLiveQuery<{
+    id: string;
+    description: string;
+    amount_minor: string;
+    kind: string;
+  }>(feesQuery.sql, feesQuery.params);
+
+  const fees = feesResult?.rows ?? [];
+  const feeTotal = fees.reduce((sum, fee) => sum + Math.abs(Number(fee.amount_minor)), 0);
 
   return (
-    <BottomSheet isOpen={!!transaction} onClose={onClose}>
-      <div className="max-h-[85vh] overflow-y-auto px-4 pb-8">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">
-              {isInflow ? 'received' : 'sent'}
-            </p>
-            <p
-              className={cn(
-                'text-2xl font-semibold mono-nums mt-1',
-                isInflow ? 'text-green-500' : 'text-red-500'
-              )}
-            >
-              {isInflow ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
-            </p>
-          </div>
-          <span className={cn('tui-badge', isInflow ? 'tui-badge-success' : '')}>
-            {getTypeLabel(meta?.type)}
-          </span>
-        </div>
-
-        <div className="mt-4 tui-box p-3">
-          <DetailRow label="date" value={formatDateWithYear(transaction.date)} />
-          <DetailRow label="time" value={new Date(transaction.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })} />
-        </div>
-
-        <div className="mt-3 tui-box p-3">
-          <DetailRow label="description" value={transaction.description} />
-        </div>
-
-        {(meta?.counterpartyName || meta?.counterpartyAccount || meta?.counterpartyBank) && (
-          <div className="mt-3 tui-box p-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-              {isInflow ? 'from' : 'to'}
-            </p>
-            {meta.counterpartyName && (
-              <DetailRow label="name" value={meta.counterpartyName} />
+    <div className="overflow-y-auto px-4 pb-8">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {isInflow ? 'received' : 'sent'}
+          </p>
+          <p
+            className={cn(
+              'mono-nums mt-1 text-2xl font-semibold',
+              isInflow ? 'text-success' : 'text-destructive'
             )}
-            {meta.counterpartyAccount && (
-              <DetailRow label="account" value={maskAccountNumber(meta.counterpartyAccount)} mono />
-            )}
-            {meta.counterpartyBank && (
-              <DetailRow label="bank" value={meta.counterpartyBank} />
-            )}
-          </div>
-        )}
-
-        {meta?.billProvider && (
-          <div className="mt-3 tui-box p-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-              bill details
+          >
+            {isInflow ? '+' : '-'}
+            {formatCurrency(Math.abs(transaction.amountMinor), txCurrency)}
+          </p>
+          {feeTotal > 0 && (
+            <p className="mt-1 text-xs text-warning">
+              + {formatCurrency(feeTotal, txCurrency)} in charges
             </p>
-            <DetailRow label="provider" value={meta.billProvider} />
-            {meta.billType && <DetailRow label="type" value={meta.billType} />}
-            {meta.billToken && <DetailRow label="token" value={meta.billToken} mono />}
-          </div>
-        )}
-
-        <div className="mt-3 tui-box p-3">
-          <DetailRow label="reference" value={transaction.reference} mono />
-          {meta?.sessionId && (
-            <DetailRow label="session" value={meta.sessionId} mono />
           )}
         </div>
+        <span className="tui-badge">{formatKind(transaction.kind)}</span>
+      </div>
 
-        {meta?.rawCategory && (
-          <div className="mt-3">
-            <span className="text-xs text-muted-foreground">
-              category: {meta.rawCategory}
-            </span>
-          </div>
+      {transaction.transferGroupId && (
+        <p className="tui-box mt-4 border-accent/30 bg-accent/10 p-3 text-xs text-accent">
+          matched as a transfer between your own accounts, so it is left out of spending totals.
+        </p>
+      )}
+
+      <div className="tui-box mt-4 p-3">
+        <DetailRow label="date" value={formatDate(transaction.bookedAt)} />
+        {transaction.valueAt && transaction.valueAt !== transaction.bookedAt && (
+          <DetailRow label="value date" value={formatDate(transaction.valueAt)} />
+        )}
+        <DetailRow label="account" value={transaction.accountLabel ?? '—'} />
+        {transaction.balanceAfterMinor !== null && (
+          <DetailRow
+            label="balance after"
+            value={formatCurrency(transaction.balanceAfterMinor, txCurrency)}
+            mono
+          />
         )}
       </div>
-    </BottomSheet>
+
+      <div className="tui-box mt-3 p-3">
+        <DetailRow label="description" value={transaction.description} />
+        {transaction.narration && transaction.narration !== transaction.description && (
+          <DetailRow label="narration" value={transaction.narration} />
+        )}
+      </div>
+
+      {transaction.counterpartyName && (
+        <div className="tui-box mt-3 p-3">
+          <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+            {isInflow ? 'from' : 'to'}
+          </p>
+          <DetailRow label="name" value={transaction.counterpartyName} />
+        </div>
+      )}
+
+      <div className="tui-box mt-3 p-3">
+        <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">category</p>
+        <CategoryPicker
+          transactionId={transaction.id}
+          categoryId={transaction.categoryId}
+          source={transaction.categorySource}
+        />
+      </div>
+
+      {fees.length > 0 && (
+        <div className="tui-box mt-3 p-3">
+          <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">charges</p>
+          {fees.map((fee) => (
+            <DetailRow
+              key={fee.id}
+              label={fee.description}
+              value={formatCurrency(Math.abs(Number(fee.amount_minor)), txCurrency)}
+              mono
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="tui-box mt-3 p-3">
+        <DetailRow label="reference" value={transaction.reference} mono />
+      </div>
+    </div>
   );
 }
 
@@ -340,38 +415,8 @@ interface DetailRowProps {
 function DetailRow({ label, value, mono }: DetailRowProps) {
   return (
     <div className="flex items-start justify-between py-1.5 text-xs">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className={cn('text-right ml-4 break-all', mono && 'mono-nums')}>
-        {value}
-      </span>
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className={cn('ml-4 break-all text-right', mono && 'mono-nums')}>{value}</span>
     </div>
   );
-}
-
-function getTypeLabel(type?: TransactionType): string {
-  switch (type) {
-    case TransactionType.Transfer:
-      return 'transfer';
-    case TransactionType.BillPayment:
-      return 'bill';
-    case TransactionType.Airtime:
-      return 'airtime';
-    case TransactionType.CardPayment:
-      return 'card';
-    case TransactionType.AtmWithdrawal:
-      return 'atm';
-    case TransactionType.BankCharge:
-      return 'fee';
-    case TransactionType.Interest:
-      return 'interest';
-    case TransactionType.Reversal:
-      return 'reversal';
-    default:
-      return 'other';
-  }
-}
-
-function maskAccountNumber(account: string): string {
-  if (account.length <= 4) return account;
-  return '****' + account.slice(-4);
 }

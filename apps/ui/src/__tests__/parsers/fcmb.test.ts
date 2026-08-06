@@ -240,7 +240,7 @@ describe('FcmbParser', () => {
       expect(result!.meta?.balanceAfter).toBe(10100000);
     });
 
-    it('stores value date as sessionId', () => {
+    it('stores the value date separately from the transaction date', () => {
       const row = [
         '01-Jan-2025',
         '02-Jan-2025',
@@ -251,7 +251,8 @@ describe('FcmbParser', () => {
       ];
 
       const result = parser.parseTransaction(row);
-      expect(result!.meta?.sessionId).toBe('02-Jan-2025');
+      expect(result!.date).toBe('2025-01-01T00:00:00.000Z');
+      expect(result!.meta?.valueDate).toBe('2025-01-02T00:00:00.000Z');
     });
 
     it('handles all month abbreviations', () => {

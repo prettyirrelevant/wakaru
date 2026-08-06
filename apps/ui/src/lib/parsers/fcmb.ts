@@ -1,6 +1,6 @@
 import {
   type RawRow,
-  type Transaction,
+  type ParsedTransaction,
   type TransactionMeta,
   BankType,
   TransactionType,
@@ -32,8 +32,7 @@ export class FcmbParser extends BaseParser {
       'g'
     );
 
-    let match;
-    while ((match = txPattern.exec(text)) !== null) {
+    for (const match of text.matchAll(txPattern)) {
       const [, txnDate, valDate, description, amountStr, balanceStr] = match;
 
       if (description.toLowerCase().includes('opening balance')) continue;
@@ -61,7 +60,7 @@ export class FcmbParser extends BaseParser {
     return rows;
   }
 
-  parseTransaction(row: RawRow): Transaction | null {
+  parseTransaction(row: RawRow): ParsedTransaction | null {
     if (!row || row.length < 6) return null;
 
     const txnDateStr = row[0]?.toString().trim() || '';
@@ -91,7 +90,10 @@ export class FcmbParser extends BaseParser {
     }
 
     if (valDateStr) {
-      meta.sessionId = valDateStr;
+      const valueDate = this.parseDDMMMYYYY(valDateStr);
+      if (valueDate) {
+        meta.valueDate = valueDate.toISOString();
+      }
     }
 
     return this.createTransaction({
