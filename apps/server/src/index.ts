@@ -130,8 +130,12 @@ app.post('/api/categorize', async (c) => {
       prompt: buildCategorizePrompt(request),
     });
     return c.json({ assignments: result.object.assignments });
-  } catch {
-    return c.json({ error: 'Model could not be reached.' }, 502);
+  } catch (error) {
+    // Keep the real cause visible: quota, a transient model error, or a
+    // response that failed schema validation are all different problems.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('categorize failed:', message);
+    return c.json({ error: `Model could not be reached. (${message})` }, 502);
   }
 });
 
