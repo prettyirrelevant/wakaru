@@ -3,24 +3,28 @@ interface SuggestedQuestionsProps {
 }
 
 const SUGGESTED_QUESTIONS = [
-  'total spending?',
-  'who did I send money to most?',
-  'biggest expense?',
-  'spending by month?',
+  'How much did I spend?',
+  'Who did I pay most?',
+  'What was my biggest expense?',
+  'Show my monthly spending.',
 ];
 
 export function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
   return (
-    <div className="flex flex-wrap gap-1.5 justify-center">
+    <div>
+      <p className="mb-3 text-center text-xs text-muted-foreground">&gt; try a question</p>
+      <div className="grid gap-2 sm:grid-cols-2">
       {SUGGESTED_QUESTIONS.map((q) => (
         <button
           key={q}
+          type="button"
           onClick={() => onSelect(q)}
-          className="tui-btn-ghost text-xs px-2 py-1"
+          className="touch-manipulation border border-border bg-surface px-3 py-2.5 text-left text-xs font-medium transition-colors hover:border-accent/40 hover:bg-accent/[0.05]"
         >
-          [{q}]
+          {q}
         </button>
       ))}
+      </div>
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { streamText, tool, convertToModelMessages, generateObject, stepCountIs } from 'ai';
+import { streamText, tool, convertToModelMessages, stepCountIs } from 'ai';
 import { createWorkersAI } from 'workers-ai-provider';
 import { z } from 'zod';
 import { SYSTEM_PROMPT } from '../../ui/src/lib/chat/schema-prompt';
 import {
-  buildCategorizePrompt,
-  CATEGORIZE_SCHEMA,
+  MIN_CATEGORY_CONFIDENCE,
+  type CategorizeAssignment,
   type CategorizeRequest,
 } from '../../ui/src/lib/ai/categorize-prompt';
 
@@ -14,13 +14,15 @@ type Bindings = {
   AI: Ai;
   CHAT_RATE_LIMITER: { limit(o: { key: string }): Promise<{ success: boolean }> };
   CATEGORIZE_RATE_LIMITER: { limit(o: { key: string }): Promise<{ success: boolean }> };
-  /** Must be a model the Workers AI catalog marks as function-calling capable. */
   AI_MODEL?: string;
-  /** Extra browser origins, comma separated. */
+  CATEGORIZE_MODEL?: string;
+  AI_GATEWAY_ID?: string;
   ALLOWED_ORIGINS?: string;
 };
 
 const DEFAULT_MODEL = '@cf/openai/gpt-oss-120b';
+const DEFAULT_CATEGORIZE_MODEL = 'typesafe/jev';
+const DEFAULT_GATEWAY_ID = 'default';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -84,7 +86,12 @@ app.post('/api/chat', async (c) => {
   return result.toUIMessageStreamResponse();
 });
 
-app.get('/health', (c) => c.json({ model: c.env.AI_MODEL ?? DEFAULT_MODEL }));
+app.get('/health', (c) =>
+  c.json({
+    chatModel: c.env.AI_MODEL ?? DEFAULT_MODEL,
+    categorizeModel: c.env.CATEGORIZE_MODEL ?? DEFAULT_CATEGORIZE_MODEL,
+  })
+);
 
 const categorizeBodySchema = z.object({
   names: z
@@ -102,11 +109,77 @@ const categorizeBodySchema = z.object({
     .max(30),
 });
 
-/**
- * Turn counterparty names into category ids, one request per import. The
- * browser sends names only — no amounts, dates, balances or account numbers —
- * and turns the result into rules it can show for review.
- */
+const jevResultSchema = z.object({
+  model: z.string().min(1),
+  answers: z.record(
+    z.object({
+      type: z.literal('choice'),
+      choice: z.string(),
+      confidence: z.number().min(0).max(1),
+    })
+  ),
+});
+
+type JevResult = z.infer<typeof jevResultSchema>;
+
+function buildJevInput(request: CategorizeRequest) {
+  const counterparties = Object.fromEntries(
+    request.names.map((candidate, index) => [`candidate_${index}`, candidate])
+  );
+  const criteria = Object.fromEntries([
+    ...request.categories.map((category) => [category.id, category.name]),
+    [
+      'skip',
+      `The name is ambiguous or no category is at least ${MIN_CATEGORY_CONFIDENCE * 100}% likely.`,
+    ],
+  ]);
+  const questions = Object.fromEntries(
+    request.names.map((_, index) => [
+      `candidate_${index}`,
+      {
+        type: 'choice',
+        instructions: [
+          `Choose the best category for \`counterparties.candidate_${index}\`.`,
+          'Use the direction as evidence.',
+          'Treat a person as an individual transfer in the stated direction.',
+          'Treat a payment app as a transfer unless the name clearly identifies a bill.',
+          'Choose the most specific category. Choose skip when the evidence is ambiguous.',
+        ],
+        criteria,
+      },
+    ])
+  );
+
+  return { state: { counterparties }, questions };
+}
+
+function mapJevAssignments(request: CategorizeRequest, result: JevResult): CategorizeAssignment[] {
+  const categoryIds = new Set(request.categories.map((category) => category.id));
+
+  return request.names.flatMap((candidate, index) => {
+    const answer = result.answers[`candidate_${index}`];
+    if (
+      !answer ||
+      answer.type !== 'choice' ||
+      answer.choice === 'skip' ||
+      !categoryIds.has(answer.choice) ||
+      !Number.isFinite(answer.confidence) ||
+      answer.confidence < MIN_CATEGORY_CONFIDENCE
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        name: candidate.name,
+        categoryId: answer.choice,
+        confidence: answer.confidence,
+        model: result.model,
+      },
+    ];
+  });
+}
+
 app.post('/api/categorize', async (c) => {
   const ip = c.req.header('cf-connecting-ip');
   if (!ip) return c.json({ error: 'Could not identify client.' }, 400);
@@ -120,16 +193,15 @@ app.post('/api/categorize', async (c) => {
     return c.json({ error: 'Invalid body.' }, 400);
   }
 
-  const workersai = createWorkersAI({ binding: c.env.AI });
   const request: CategorizeRequest = parsed.data;
 
   try {
-    const result = await generateObject({
-      model: workersai((c.env.AI_MODEL ?? DEFAULT_MODEL) as Parameters<typeof workersai>[0]),
-      schema: CATEGORIZE_SCHEMA,
-      prompt: buildCategorizePrompt(request),
+    const model = c.env.CATEGORIZE_MODEL ?? DEFAULT_CATEGORIZE_MODEL;
+    const response = await c.env.AI.run(model as never, buildJevInput(request) as never, {
+      gateway: { id: c.env.AI_GATEWAY_ID ?? DEFAULT_GATEWAY_ID },
     });
-    return c.json({ assignments: result.object.assignments });
+    const result = jevResultSchema.parse(response);
+    return c.json({ assignments: mapJevAssignments(request, result) });
   } catch (error) {
     // Keep the real cause visible: quota, a transient model error, or a
     // response that failed schema validation are all different problems.

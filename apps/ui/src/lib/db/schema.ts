@@ -60,6 +60,10 @@ export const SCHEMA = `
     category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     priority    INTEGER NOT NULL DEFAULT 100,
     source      TEXT NOT NULL DEFAULT 'user',
+    suggestion_confidence DOUBLE PRECISION CHECK (
+      suggestion_confidence IS NULL OR suggestion_confidence BETWEEN 0 AND 1
+    ),
+    suggestion_model TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 

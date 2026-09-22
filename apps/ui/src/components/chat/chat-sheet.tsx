@@ -3,7 +3,7 @@ import { useChat } from '@ai-sdk/react';
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import type { UIMessage } from 'ai';
 import { usePGlite } from '@electric-sql/pglite-react';
-import { BottomSheet } from '~/components/ui';
+import { BottomSheet } from '~/components/ui/bottom-sheet';
 import { useSettingsStore } from '~/stores/settings';
 import { executeModelQuery } from '~/lib/db';
 import type { ChatMode } from '~/types';
@@ -18,14 +18,15 @@ interface ChatSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenSettings: () => void;
+  instant?: boolean;
 }
 
-export function ChatSheet({ isOpen, onClose, onOpenSettings }: ChatSheetProps) {
+export function ChatSheet({ isOpen, onClose, onOpenSettings, instant }: ChatSheetProps) {
   const chatMode = useSettingsStore((s) => s.chatMode);
   const chatKey = getChatKey(chatMode);
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose}>
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="Ask about your money" instant={instant}>
       <ChatContent
         key={chatKey}
         isOpen={isOpen}
@@ -115,13 +116,14 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
         messageTimestamps.current.set(msg.id, new Date());
       }
     });
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 300);
-    }
+    if (!isOpen || !window.matchMedia('(min-width: 768px)').matches) return;
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 250);
+    return () => window.clearTimeout(timer);
   }, [isOpen]);
 
   const handleOpenSettings = () => {
@@ -139,30 +141,30 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
   const errorMessage = getErrorMessage(error, chatMode);
 
   return (
-    <div className="relative flex h-[70vh] flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-4 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-accent">$</span>
-            <h2 className="text-sm font-semibold">ask</h2>
+    <div className="relative flex h-[72vh] flex-col overflow-hidden sm:h-full">
+        <div className="flex items-center justify-between border-b border-border px-5 pb-4 pr-16 sm:px-8 sm:pt-4">
+          <div>
+            <p className="text-xs text-accent">$ ask</p>
+            <h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">ask your ledger</h2>
           </div>
           <ChatBadge mode={chatMode} />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:px-8" aria-live="polite">
           {messages.length === 0 ? (
             <div className="space-y-4">
               {chatMode.type === 'off' && (
-                <div className="tui-box p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">chat is disabled</p>
-                  <p className="text-xs text-muted-foreground/70">
-                    go to{' '}
+                <div className="tui-box space-y-2 p-4">
+                  <p className="text-sm font-semibold">chat is disabled</p>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    open{' '}
                     <button
                       onClick={handleOpenSettings}
-                      className="text-accent hover:underline"
+                      className="rounded font-semibold text-accent hover:underline"
                     >
                       [settings]
                     </button>
-                    {' '}to enable it
+                    {' '}to choose a local or cloud model.
                   </p>
                 </div>
               )}
@@ -191,9 +193,8 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
                 const showCursor = lastMsg?.role === 'user' || (lastMsg?.role === 'assistant' && !lastMsgContent);
                 return showCursor ? (
                   <div className="flex justify-start">
-                    <div className="tui-box px-3 py-2 text-xs">
-                      <span className="text-muted-foreground mr-1">&gt;</span>
-                      <span className="text-muted-foreground/50 mr-1">thinking...</span>
+                    <div className="border border-border bg-surface px-3.5 py-2.5 text-xs">
+                      <span className="mr-1 text-muted-foreground">thinking…</span>
                       <span className="cursor-blink"></span>
                     </div>
                   </div>
@@ -204,9 +205,8 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
 
           {errorMessage && (
             <div className="flex justify-start">
-              <div className="tui-box border-destructive/50 bg-destructive/10 px-3 py-2">
-                <span className="text-destructive mr-1">!</span>
-                <span className="text-xs text-destructive">{errorMessage}</span>
+              <div className="border border-destructive/40 bg-destructive-muted px-3.5 py-2.5">
+                <span className="text-xs leading-5 text-destructive">{errorMessage}</span>
               </div>
             </div>
           )}
@@ -214,26 +214,27 @@ function ChatContent({ isOpen, chatMode, onClose, onOpenSettings }: ChatContentP
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={onFormSubmit} className="border-t border-border p-4">
+        <form onSubmit={onFormSubmit} className="border-t border-border p-4 sm:px-8 sm:pb-6">
           <div className="flex gap-2">
-            <div className="flex-1 flex items-center tui-box">
-              <span className="text-muted-foreground text-xs pl-3">&gt;</span>
+            <div className="flex flex-1 items-center border border-border bg-surface focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
               <input
                 ref={inputRef}
+                name="chat-question"
                 type="text"
+                autoComplete="off"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={canChat ? 'ask anything...' : 'chat unavailable'}
+                placeholder={canChat ? 'ask anything…' : 'chat unavailable'}
                 disabled={isLoading || !canChat}
-                className="flex-1 bg-transparent px-2 py-2 text-base sm:text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-base placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 sm:text-sm"
               />
             </div>
             <button
               type="submit"
               disabled={!input.trim() || isLoading || !canChat}
-              className="tui-btn-primary px-3 py-2 text-xs disabled:opacity-30"
+              className="tui-btn-primary px-4 py-2 text-xs disabled:opacity-30"
             >
-              {canChat ? 'go' : '—'}
+              {canChat ? '[send]' : '—'}
             </button>
           </div>
         </form>

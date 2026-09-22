@@ -6,6 +6,7 @@ export default {
     extend: {
       colors: {
         background: 'hsl(var(--background))',
+        surface: 'hsl(var(--surface))',
         foreground: 'hsl(var(--foreground))',
         muted: {
           DEFAULT: 'hsl(var(--muted))',
@@ -34,6 +35,13 @@ export default {
         },
       },
       fontFamily: {
+        display: [
+          'ui-sans-serif',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'sans-serif',
+        ],
         mono: [
           'JetBrains Mono',
           'Fira Code',
@@ -44,8 +52,7 @@ export default {
         ],
         sans: [
           'JetBrains Mono',
-          'Fira Code',
-          'SF Mono',
+          'SFMono-Regular',
           'Consolas',
           'Liberation Mono',
           'monospace',

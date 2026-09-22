@@ -22,15 +22,17 @@ export function ModeToggle({ value, onChange, localStatus }: ModeToggleProps) {
   };
 
   return (
-    <div className="flex gap-1">
+    <div className="inline-flex border border-border bg-muted/50 p-1" role="group" aria-label="AI mode">
       {OPTIONS.map((option) => (
         <button
           key={option.value}
+          type="button"
           onClick={() => onChange(option.value)}
-          className={`text-xs px-3 py-1.5 border transition-colors ${
+          aria-pressed={value === option.value}
+          className={`touch-manipulation px-3 py-1.5 text-xs font-semibold transition-colors ${
             value === option.value
-              ? 'bg-accent text-accent-foreground border-accent'
-              : 'bg-muted border-border hover:border-border-strong'
+              ? 'bg-surface text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           [{option.label}]

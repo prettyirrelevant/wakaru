@@ -9,11 +9,15 @@ export const Progress = forwardRef<HTMLDivElement, ProgressProps>(
   ({ className, value, ...props }, ref) => (
     <div
       ref={ref}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.min(100, Math.max(0, value))}
       className={cn('h-1 w-full overflow-hidden rounded-full bg-muted', className)}
       {...props}
     >
       <div
-        className="h-full bg-foreground transition-all duration-300 ease-out"
+        className="h-full bg-accent transition-[width] duration-200 ease-out"
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
     </div>

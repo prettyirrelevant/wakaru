@@ -2,6 +2,7 @@ import { useCallback, useState, type DragEvent, type ChangeEvent } from 'react';
 import { cn } from '~/lib/utils';
 import { ACCEPTED_FILE_TYPES } from '~/lib/constants';
 import type { FileFormat } from '~/types';
+import { Icon } from '~/components/ui/icon';
 
 interface DropZoneProps {
   onFileSelect: (file: File) => void;
@@ -11,9 +12,9 @@ interface DropZoneProps {
 }
 
 const FORMAT_LABELS: Record<FileFormat, string> = {
-  pdf: '.pdf',
-  excel: '.xlsx',
-  csv: '.csv',
+  pdf: 'PDF',
+  excel: 'Excel',
+  csv: 'CSV',
 };
 
 const FORMAT_EXTENSIONS: Record<FileFormat, string[]> = {
@@ -45,7 +46,7 @@ export function DropZone({ onFileSelect, onError, disabled, fileFormat }: DropZo
     onFileSelect(file);
   }, [fileFormat, onFileSelect, onError]);
 
-  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+  const handleDragOver = useCallback((e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (!disabled) {
@@ -53,14 +54,14 @@ export function DropZone({ onFileSelect, onError, disabled, fileFormat }: DropZo
     }
   }, [disabled]);
 
-  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
+    (e: DragEvent<HTMLLabelElement>) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
@@ -89,73 +90,52 @@ export function DropZone({ onFileSelect, onError, disabled, fileFormat }: DropZo
   const acceptTypes = fileFormat ? FORMAT_ACCEPT[fileFormat] : ACCEPTED_FILE_TYPES;
 
   return (
-    <div
+    <label
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        'relative w-full max-w-sm',
-        disabled && 'pointer-events-none opacity-50'
+        'group relative block w-full focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-background',
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
       )}
     >
-      <label className="flex cursor-pointer flex-col">
-        {/* ASCII art box */}
-        <div
+      <div
+        className={cn(
+          'flex min-h-40 flex-col items-center justify-center border border-dashed px-5 py-6 text-center',
+          'transition-[background-color,border-color,transform] duration-150 ease-out',
+          !disabled && 'group-hover:border-accent/60 group-hover:bg-accent/[0.04]',
+          isDragging && 'scale-[0.99] border-accent bg-accent/[0.07]'
+        )}
+      >
+        <Icon
+          name="upload"
           className={cn(
-            'tui-box p-6 transition-colors',
-            isDragging && 'border-accent bg-accent/5'
+            'mb-3 h-7 w-7 transition-colors duration-150',
+            isDragging ? 'text-accent' : 'text-muted-foreground group-hover:text-accent'
           )}
-        >
-          {/* Top decoration */}
-          <div className="text-muted-foreground text-xs text-center mb-4">
-            ╭───────────────────────────╮
-          </div>
-
-          {/* Upload icon as ASCII */}
-          <div className="flex justify-center">
-            <pre className={cn(
-              'text-xs leading-tight font-mono',
-              isDragging ? 'text-accent' : 'text-muted-foreground'
-            )}>{`  ▲
- ╱│╲
-╱ │ ╲
-  │
-──┴──`}</pre>
-          </div>
-
-          {/* Text */}
-          <div className="text-center mt-4 space-y-1">
-            <p className="text-xs">
-              {isDragging ? (
-                <span className="text-accent">release to upload</span>
-              ) : (
-                <>
-                  <span className="text-foreground">drop</span>
-                  <span className="text-muted-foreground"> or </span>
-                  <span className="text-foreground">tap</span>
-                  <span className="text-muted-foreground"> to upload</span>
-                </>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground/70">
-              {fileFormat ? FORMAT_LABELS[fileFormat] : '.xlsx · .csv · .pdf'}
-            </p>
-          </div>
-
-          {/* Bottom decoration */}
-          <div className="text-muted-foreground text-xs text-center mt-4">
-            ╰───────────────────────────╯
-          </div>
-        </div>
-
-        <input
-          type="file"
-          accept={acceptTypes}
-          onChange={handleFileInput}
-          disabled={disabled}
-          className="sr-only"
         />
-      </label>
-    </div>
+        <p className="text-sm font-semibold">
+          {isDragging ? 'release to upload' : 'drop a statement here'}
+        </p>
+        <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">
+          {isDragging
+              ? 'the import starts when you release the file.'
+              : `or browse your device. ${fileFormat ? `${FORMAT_LABELS[fileFormat]} files only.` : 'PDF, Excel, and CSV files work.'}`}
+        </p>
+        <span className="mt-3 border border-border bg-surface px-3 py-1.5 text-xs font-semibold">
+          [browse files]
+        </span>
+      </div>
+
+      <input
+        name="statement"
+        aria-label="Choose a bank statement"
+        type="file"
+        accept={acceptTypes}
+        onChange={handleFileInput}
+        disabled={disabled}
+        className="sr-only"
+      />
+    </label>
   );
 }

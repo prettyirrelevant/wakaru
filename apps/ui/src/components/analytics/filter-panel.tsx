@@ -30,13 +30,20 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
   };
 
   return (
-    <div className="space-y-4 border-b border-border py-3">
-      <Group label="type">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold">&gt; filters</h3>
+          <p className="mt-1 text-xs text-muted-foreground">every filter also updates dashboard totals.</p>
+        </div>
+      </div>
+
+      <Group label="flow">
         <Chip active={filters.flow === 'in'} onClick={() => setFlow('in')} tone="success">
-          [credit]
+          [money in]
         </Chip>
         <Chip active={filters.flow === 'out'} onClick={() => setFlow('out')} tone="destructive">
-          [debit]
+          [money out]
         </Chip>
       </Group>
 
@@ -75,7 +82,7 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
       )}
 
       {kinds.length > 1 && (
-        <Group label="kind">
+        <Group label="transaction type">
           {kinds.map((kind) => (
             <Chip
               key={kind}
@@ -90,51 +97,61 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <div className="mb-1.5 text-[10px] text-muted-foreground">&gt; amount</div>
+          <label htmlFor="amount-min" className="mb-2 block text-xs font-medium text-muted-foreground">&gt; amount</label>
           <div className="flex items-center gap-1">
             <input
+              id="amount-min"
+              name="amount-min"
               type="number"
-              inputMode="numeric"
+              inputMode="decimal"
+              autoComplete="off"
               aria-label="Minimum amount"
-              placeholder="min"
+              placeholder="min…"
               value={filters.amountMin ?? ''}
               onChange={(e) => onChange({ ...filters, amountMin: parseAmount(e.target.value) })}
-              className="mono-nums w-full border border-border bg-background px-2 py-1.5 text-base focus:border-accent focus:outline-none sm:text-sm"
+              className="tui-input mono-nums w-full text-base sm:text-sm"
             />
             <span className="text-[10px] text-muted-foreground">to</span>
             <input
+              name="amount-max"
               type="number"
-              inputMode="numeric"
+              inputMode="decimal"
+              autoComplete="off"
               aria-label="Maximum amount"
-              placeholder="max"
+              placeholder="max…"
               value={filters.amountMax ?? ''}
               onChange={(e) => onChange({ ...filters, amountMax: parseAmount(e.target.value) })}
-              className="mono-nums w-full border border-border bg-background px-2 py-1.5 text-base focus:border-accent focus:outline-none sm:text-sm"
+              className="tui-input mono-nums w-full text-base sm:text-sm"
             />
           </div>
         </div>
 
         <div>
-          <div className="mb-1.5 text-[10px] text-muted-foreground">&gt; date</div>
+          <label htmlFor="date-from" className="mb-2 block text-xs font-medium text-muted-foreground">&gt; date</label>
           <div className="flex items-center gap-1">
             <input
               type="date"
+              id="date-from"
+              name="date-from"
+              autoComplete="off"
               aria-label="From date"
               value={filters.dateFrom ?? ''}
               min={minDate ?? undefined}
               max={maxDate ?? undefined}
               onChange={(e) => onChange({ ...filters, dateFrom: e.target.value || null })}
-              className="w-full border border-border bg-background px-2 py-1.5 text-xs focus:border-accent focus:outline-none"
+              className="tui-input w-full text-xs"
             />
             <span className="text-[10px] text-muted-foreground">to</span>
             <input
               type="date"
+              name="date-to"
+              autoComplete="off"
               aria-label="To date"
               value={filters.dateTo ?? ''}
               min={minDate ?? undefined}
               max={maxDate ?? undefined}
               onChange={(e) => onChange({ ...filters, dateTo: e.target.value || null })}
-              className="w-full border border-border bg-background px-2 py-1.5 text-xs focus:border-accent focus:outline-none"
+              className="tui-input w-full text-xs"
             />
           </div>
         </div>
@@ -149,7 +166,7 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
         <Toggle
           checked={filters.hideChildFees}
           onChange={(checked) => onChange({ ...filters, hideChildFees: checked })}
-          label="roll fees into their transaction"
+          label="group fees with transactions"
         />
       </div>
     </div>
@@ -159,8 +176,8 @@ export function FilterPanel({ filters, onChange }: FilterPanelProps) {
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <fieldset>
-      <legend className="mb-1.5 text-[10px] text-muted-foreground">&gt; {label}</legend>
-      <div className="flex flex-wrap gap-1">{children}</div>
+      <legend className="mb-2 text-xs font-medium text-muted-foreground">{label}</legend>
+      <div className="flex flex-wrap gap-2">{children}</div>
     </fieldset>
   );
 }
@@ -182,11 +199,11 @@ function Chip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'border px-2 py-1 text-xs transition-colors',
-        !active && 'border-border bg-muted hover:border-border-strong',
-        active && tone === 'success' && 'border-success/50 bg-success/20 text-success',
-        active && tone === 'destructive' && 'border-destructive/50 bg-destructive/20 text-destructive',
-        active && !tone && 'border-accent bg-accent text-accent-foreground'
+        'touch-manipulation border px-2.5 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] active:scale-[0.97]',
+        !active && 'border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground',
+        active && tone === 'success' && 'border-success/40 bg-success-muted text-success',
+        active && tone === 'destructive' && 'border-destructive/40 bg-destructive-muted text-destructive',
+        active && !tone && 'border-accent/40 bg-accent/10 text-accent'
       )}
     >
       {children}
@@ -204,7 +221,7 @@ function Toggle({
   label: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+    <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
       <input
         type="checkbox"
         checked={checked}

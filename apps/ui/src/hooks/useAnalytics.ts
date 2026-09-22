@@ -49,7 +49,7 @@ function useQuery<Row, Out>(
   return useMemo(() => map((rows ?? []) as Row[]), [rows]);
 }
 
-export function useSummary(filters: FilterState, search: string): Summary {
+function useSummary(filters: FilterState, search: string): Summary {
   return useQuery<
     { inflow: string; outflow: string; fees: string; count: string; min_date: Date | null; max_date: Date | null },
     Summary
@@ -73,7 +73,7 @@ export function useSummary(filters: FilterState, search: string): Summary {
   );
 }
 
-export function useInternalTransfers(filters: FilterState, search: string) {
+function useInternalTransfers(filters: FilterState, search: string) {
   return useQuery<{ groups: string; amount: string }, { groups: number; amountMinor: number }>(
     () => internalTransferQuery(filters, search),
     (rows) => ({
@@ -84,7 +84,7 @@ export function useInternalTransfers(filters: FilterState, search: string) {
   );
 }
 
-export function useMonthlyFlow(filters: FilterState, search: string): MonthlyData[] {
+function useMonthlyFlow(filters: FilterState, search: string): MonthlyData[] {
   return useQuery<{ month: string; inflow: string; outflow: string }, MonthlyData[]>(
     () => monthlyFlowQuery(filters, search),
     (rows) =>
@@ -97,7 +97,7 @@ export function useMonthlyFlow(filters: FilterState, search: string): MonthlyDat
   );
 }
 
-export function useCategorySpend(filters: FilterState, search: string): CategorySpend[] {
+function useCategorySpend(filters: FilterState, search: string): CategorySpend[] {
   return useQuery<
     { category_id: string | null; category_name: string; amount: string; count: string },
     CategorySpend[]
@@ -117,7 +117,7 @@ export function useCategorySpend(filters: FilterState, search: string): Category
   );
 }
 
-export function useTopCounterparties(
+function useTopCounterparties(
   filters: FilterState,
   search: string,
   direction: 'out' | 'in' = 'out'
@@ -138,7 +138,7 @@ export function useTopCounterparties(
   );
 }
 
-export function useRecurringPayments(filters: FilterState, search: string): RecurringPayment[] {
+function useRecurringPayments(filters: FilterState, search: string): RecurringPayment[] {
   return useQuery<{ name: string; occurrences: string; avg_amount: string }, RecurringPayment[]>(
     () => recurringQuery(filters, search),
     (rows) =>
@@ -158,7 +158,7 @@ export function useRecurringPayments(filters: FilterState, search: string): Recu
  * that was quiet for a week would drop out of the total and make it collapse.
  * Carry each account's last known balance forward before summing.
  */
-export function useBalanceSeries(filters: FilterState, search: string): BalancePoint[] {
+function useBalanceSeries(filters: FilterState): BalancePoint[] {
   return useQuery<{ account_id: string; day: Date; closing: string }, BalancePoint[]>(
     () => dailyBalanceQuery(filters),
     (rows) => {
@@ -177,6 +177,19 @@ export function useBalanceSeries(filters: FilterState, search: string): BalanceP
         return { at: day, balanceMinor: total };
       });
     },
-    [filters, search]
+    [filters]
   );
+}
+
+export function useDashboardData(filters: FilterState, search: string) {
+  return {
+    summary: useSummary(filters, search),
+    internalTransfers: useInternalTransfers(filters, search),
+    monthlyFlow: useMonthlyFlow(filters, search),
+    balanceSeries: useBalanceSeries(filters),
+    categorySpend: useCategorySpend(filters, search),
+    paidTo: useTopCounterparties(filters, search, 'out'),
+    receivedFrom: useTopCounterparties(filters, search, 'in'),
+    recurringPayments: useRecurringPayments(filters, search),
+  };
 }

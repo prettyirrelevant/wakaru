@@ -22,10 +22,9 @@ export function TopCounterparties({
   if (outgoing.length === 0 && incoming.length === 0) return null;
 
   return (
-    <section className="tui-box p-4" aria-labelledby="counterparties-heading">
+    <section className="tui-box p-5" aria-labelledby="counterparties-heading">
       <div className="mb-3 flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">$</span>
-        <h2 id="counterparties-heading" className="text-sm font-medium">
+        <h2 id="counterparties-heading" className="text-sm font-semibold">
           {direction === 'out' ? 'paid most to' : 'received most from'}
         </h2>
         <div className="ml-auto flex gap-1" role="group" aria-label="Direction">
@@ -43,7 +42,7 @@ export function TopCounterparties({
       </div>
 
       {data.length === 0 ? (
-        <p className="text-xs text-muted-foreground">nothing here for this period</p>
+        <p className="text-xs text-muted-foreground">no transactions match this period</p>
       ) : (
         <ol className="space-y-1.5">
           {data.map((row, index) => (
@@ -88,8 +87,10 @@ function DirectionButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'border px-2 py-0.5 text-[11px]',
-        active ? 'border-accent bg-accent text-accent-foreground' : 'border-border text-muted-foreground'
+        'border px-2 py-1 text-[11px] font-semibold transition-colors',
+        active
+          ? 'border-border-strong bg-muted text-foreground'
+          : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
       )}
     >
       {label}

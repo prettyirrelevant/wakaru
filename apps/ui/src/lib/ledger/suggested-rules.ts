@@ -16,19 +16,10 @@ import { PROXY_URL } from '~/lib/constants';
 import {
   buildCategorizePrompt,
   CATEGORIZE_SCHEMA,
+  type CategorizeAssignment,
   type CategorizeCandidate,
   type CategorizeRequest,
 } from '~/lib/ai/categorize-prompt';
-
-/**
- * AI categorisation writes rules, not labels.
- *
- * After an import, the distinct uncategorised counterparties go to the model
- * once; what comes back is a mapping to category ids, persisted as ordinary
- * rules (source 'suggested') that the user can review, keep or reject in bulk.
- * From then on the rules engine is deterministic — re-importing changes
- * nothing, and nothing is re-sent.
- */
 
 const REJECTED_KEY = 'rejectedSuggestions';
 const MAX_SUGGEST_NAMES = 60;
@@ -41,7 +32,6 @@ interface RuleRowForReapply {
   kind: string;
 }
 
-/** Distinct uncategorised counterparties, most frequent first. */
 export async function collectUncategorizedCounterparties(
   db: Queryable
 ): Promise<CategorizeCandidate[]> {
@@ -78,11 +68,10 @@ export async function collectUncategorizedCounterparties(
   return names;
 }
 
-/** One model round trip. Returns the category each confident name maps to. */
 export async function suggestRuleAssignments(
   chatMode: ChatMode,
   request: CategorizeRequest
-): Promise<{ name: string; categoryId: string }[]> {
+): Promise<CategorizeAssignment[]> {
   if (chatMode.type === 'cloud') {
     const response = await fetch(`${PROXY_URL}/api/categorize`, {
       method: 'POST',
@@ -91,8 +80,7 @@ export async function suggestRuleAssignments(
       signal: AbortSignal.timeout(90_000),
     });
     if (!response.ok) throw new Error(`categorise proxy returned ${response.status}`);
-    const data = (await response.json()) as { assignments?: { name: string; categoryId: string }[] };
-    return data.assignments ?? [];
+    return CATEGORIZE_SCHEMA.parse(await response.json()).assignments;
   }
 
   if (chatMode.type === 'local' && chatMode.status === 'connected') {
@@ -113,15 +101,9 @@ export async function suggestRuleAssignments(
   throw new Error('ai categorisation is disabled');
 }
 
-/**
- * Persist AI assignments as suggested rules. Deterministic ids make a repeat
- * pass a no-op, and a name that already has any rule — kept by the user,
- * written by hand, or suggested before — is never suggested again, so a
- * later model guess with a different category cannot supersede a kept one.
- */
 export async function persistSuggestedRules(
   db: Queryable,
-  assignments: { name: string; categoryId: string }[]
+  assignments: CategorizeAssignment[]
 ): Promise<number> {
   if (assignments.length === 0) return 0;
 
@@ -139,10 +121,20 @@ export async function persistSuggestedRules(
 
     const id = `rule-sug-${hashParts(pattern, assignment.categoryId)}`;
     await db.query(
-      `INSERT INTO rules (id, match_field, match_type, pattern, category_id, priority, source)
-       VALUES ($1, 'counterparty', 'contains', $2, $3, $4, 'suggested')
+      `INSERT INTO rules (
+         id, match_field, match_type, pattern, category_id, priority, source,
+         suggestion_confidence, suggestion_model
+       )
+       VALUES ($1, 'counterparty', 'contains', $2, $3, $4, 'suggested', $5, $6)
        ON CONFLICT (id) DO NOTHING`,
-      [id, pattern, assignment.categoryId, SUGGESTED_PRIORITY]
+      [
+        id,
+        pattern,
+        assignment.categoryId,
+        SUGGESTED_PRIORITY,
+        assignment.confidence ?? null,
+        assignment.model ?? null,
+      ]
     );
     persisted++;
   }
@@ -150,7 +142,6 @@ export async function persistSuggestedRules(
   return persisted;
 }
 
-/** Run the rules engine over a fixed set of rows, writing whatever wins now. */
 export async function reapplyRulesForRows(
   db: Queryable,
   rows: RuleRowForReapply[]
@@ -175,7 +166,6 @@ export async function reapplyRulesForRows(
   return categorized;
 }
 
-/** Apply the current rule set to every row that has no category yet. */
 export async function applyRulesToUncategorized(db: Queryable): Promise<number> {
   const result = await db.query<RuleRowForReapply>(
     `SELECT t.id, t.description, t.kind, cp.canonical_name AS "counterpartyName"
@@ -195,11 +185,6 @@ export async function approveSuggestedRule(db: Queryable, ruleId: string): Promi
   ]);
 }
 
-/**
- * Reject a suggestion: delete the rule, remember the name so it is never
- * suggested again, and uncategorise the rows only it had categorised.
- * User-set categories are untouched.
- */
 export async function rejectSuggestedRule(db: Queryable, ruleId: string): Promise<void> {
   const rules = await listRules(db);
   const rule: Rule | undefined = rules.find((r) => r.id === ruleId);
@@ -230,12 +215,6 @@ export async function rejectSuggestedRule(db: Queryable, ruleId: string): Promis
   );
 }
 
-/**
- * The whole pass, gated on the chat mode the user already chose:
- * off → nothing; local → their own model, nothing leaves the machine;
- * cloud → the same proxy they already opted into. Best-effort: callers
- * decide what a failure means to the import flow.
- */
 export async function runSuggestionPass(
   db: Queryable,
   chatMode: ChatMode

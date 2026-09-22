@@ -1,14 +1,9 @@
-// ---------------------------------------------------------------------------
-// Parser DTO
-//
 // What a bank parser emits for a single statement line. This is deliberately
 // separate from the stored ledger row: parsers know about one file, they do
 // not know which account it belongs to, what position the row holds, or who
 // the counterparty is as a persistent identity. The ingest layer decides all
 // of that. Keeping the seam here means a parser change never touches storage
 // and vice versa.
-// ---------------------------------------------------------------------------
-
 export interface ParsedTransaction {
   id: string;
   date: string; // ISO string
@@ -92,10 +87,6 @@ export interface BankParser {
   parseTransaction(row: RawRow, rowIndex: number): ParsedTransaction | null;
 }
 
-// ---------------------------------------------------------------------------
-// Ledger
-// ---------------------------------------------------------------------------
-
 export type CurrencyCode = 'NGN' | 'USD' | 'GBP' | 'EUR';
 
 /** Minor units per major unit. Every currency here has two decimals. */
@@ -161,6 +152,8 @@ export interface Rule {
   categoryId: string;
   priority: number;
   source?: RuleSource;
+  suggestionConfidence?: number | null;
+  suggestionModel?: string | null;
 }
 
 /** A stored ledger row. */
@@ -190,10 +183,6 @@ export interface LedgerTransaction {
   accountBank?: BankType;
   accountLabel?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Import pipeline
-// ---------------------------------------------------------------------------
 
 export type FileFormat = 'pdf' | 'excel' | 'csv';
 
@@ -265,10 +254,6 @@ export interface SuggestedRulesOutcome {
   rows: number;
 }
 
-// ---------------------------------------------------------------------------
-// Settings / chat
-// ---------------------------------------------------------------------------
-
 export type Theme = 'light' | 'dark' | 'system';
 
 export type ChatModeType = 'off' | 'cloud' | 'local';
@@ -287,10 +272,6 @@ export type ChatMode =
     };
 
 export type LocalChatMode = Extract<ChatMode, { type: 'local' }>;
-
-// ---------------------------------------------------------------------------
-// Analytics
-// ---------------------------------------------------------------------------
 
 export interface MonthlyData {
   month: string;

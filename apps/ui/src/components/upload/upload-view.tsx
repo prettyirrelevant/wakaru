@@ -1,117 +1,81 @@
 import { useState } from 'react';
-import { DropZone } from './drop-zone';
-import { BankPicker } from './bank-picker';
-import { CurrencyPicker } from './currency-picker';
-import { PasswordPrompt } from './password-prompt';
-import { ImportResult } from './import-result';
-import { Progress } from '~/components/ui';
+import { Brand } from '~/components/ui/brand';
+import { Button } from '~/components/ui/button';
 import { SettingsSheet } from '~/components/settings/settings-sheet';
-import { useStatementUpload } from '~/hooks/useStatementUpload';
+import { StatementImporter } from './statement-importer';
 
 export function UploadView() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const upload = useStatementUpload();
+  const [isSettingsMounted, setIsSettingsMounted] = useState(false);
+
+  const openSettings = () => {
+    setIsSettingsMounted(true);
+    setIsSettingsOpen(true);
+  };
 
   return (
-    <div className="flex min-h-screen flex-col px-4 py-6">
-      <header className="flex items-center justify-between">
-        <img src="/logo.png" alt="Wakaru" className="h-8 sm:h-12" />
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="tui-btn-ghost px-2 py-1 text-xs"
-          aria-label="Settings"
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+
+      <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-5 py-5 sm:px-8">
+        <Brand />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={openSettings}
+          aria-label="Open settings"
+          aria-haspopup="dialog"
+          aria-expanded={isSettingsOpen}
         >
           [cfg]
-        </button>
+        </Button>
       </header>
 
-      {upload.isProcessing && upload.status.stage === 'parsing' && (
-        <div className="tui-box mt-4 space-y-2 p-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{upload.status.message}</span>
-            <span className="mono-nums">{upload.status.progress}%</span>
-          </div>
-          <Progress value={upload.status.progress} />
-        </div>
-      )}
+      <main
+        id="main-content"
+        className="mx-auto grid w-full max-w-[1200px] flex-1 items-center gap-10 px-5 py-8 sm:px-8 sm:py-12 lg:grid-cols-[minmax(0,0.75fr)_minmax(480px,1fr)] lg:gap-14 lg:py-16"
+      >
+        <section className="max-w-xl lg:pb-10">
+          <p className="mb-5 text-xs text-accent" aria-hidden="true">$ wakaru --open</p>
+          <h1 className="max-w-lg text-balance font-display text-5xl font-semibold leading-[0.96] tracking-[-0.055em] text-foreground sm:text-6xl lg:text-[4.25rem]">
+            your statement, decoded.
+          </h1>
+          <p className="mt-6 max-w-md text-pretty text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
+            drop in a bank statement. wakaru turns it into a private ledger you can search and question.
+          </p>
+          <p className="mt-6 border-l border-accent pl-3 text-xs leading-5 text-muted-foreground">
+            // your statement stays in this browser
+          </p>
+        </section>
 
-      {upload.status.stage === 'error' && (
-        <div
-          role="alert"
-          className="tui-box mt-4 border-destructive/30 bg-destructive-muted p-3 text-xs text-destructive"
+        <section
+          aria-labelledby="import-title"
+          className="w-full border border-border bg-surface/95 p-5 shadow-xl shadow-black/10 backdrop-blur sm:p-7"
         >
-          <span className="mr-2 text-muted-foreground">err:</span>
-          {upload.status.message}
-        </div>
-      )}
+          <h2 id="import-title" className="mb-5 text-sm font-semibold text-accent">
+            &gt; import-statement
+          </h2>
+          <StatementImporter />
+        </section>
+      </main>
 
-      {upload.status.stage === 'complete' && (
-        <ImportResult
-          summary={upload.status.summary}
-          suggestions={upload.status.suggestions}
-          className="mt-4"
-        />
-      )}
-
-      <div className="mt-8 flex flex-1 flex-col items-center justify-center gap-8">
-        <div className="space-y-2 text-center">
-          <p className="text-sm text-muted-foreground">know where your money went</p>
-          <p className="text-xs text-muted-foreground/70">
-            your bank statement never leaves your device
-          </p>
-        </div>
-
-        {upload.pendingFile ? (
-          <PasswordPrompt
-            fileName={upload.pendingFile.name}
-            password={upload.password}
-            onPasswordChange={upload.setPassword}
-            error={upload.passwordError}
-            onUnlock={upload.unlock}
-            onCancel={upload.cancelPending}
-            disabled={upload.isProcessing}
-          />
-        ) : (
-          <DropZone
-            onFileSelect={upload.selectFile}
-            onError={upload.fail}
-            disabled={upload.isProcessing || !upload.selectedBank}
-            fileFormat={upload.selectedBankInfo?.fileFormat}
-          />
-        )}
-
-        <div className="w-full max-w-sm space-y-3">
-          <BankPicker selectedBank={upload.selectedBank} onSelectBank={upload.setSelectedBank} />
-          {upload.selectedBank && (
-            <CurrencyPicker value={upload.currency} onChange={upload.setCurrency} />
-          )}
-          {upload.currencyWarning && (
-            <p className="text-xs text-warning">{upload.currencyWarning}</p>
-          )}
-        </div>
-
-        {!upload.selectedBank && (
-          <p className="text-center text-xs text-muted-foreground">
-            <span className="text-accent">hint:</span> select your bank first
-          </p>
-        )}
-      </div>
-
-      <footer className="mt-auto pt-8 text-center">
-        <p className="text-xs text-muted-foreground/50">
-          <a
-            href={`https://github.com/prettyirrelevant/wakaru/commit/${__GIT_SHA__}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-muted-foreground"
-          >
-            {__GIT_SHA__}
-          </a>
-          {' · your data stays here'}
-        </p>
+      <footer className="mx-auto flex w-full max-w-[1200px] justify-end px-5 py-5 text-[11px] text-muted-foreground sm:px-8">
+        <a
+          href={`https://github.com/prettyirrelevant/wakaru/commit/${__GIT_SHA__}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-border-strong underline-offset-4 hover:text-foreground"
+        >
+          build/{__GIT_SHA__}
+        </a>
       </footer>
 
-      <SettingsSheet isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      {isSettingsMounted && (
+        <SettingsSheet isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      )}
     </div>
   );
 }

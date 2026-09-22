@@ -1,5 +1,6 @@
 import type { ImportSummary, SuggestedRulesOutcome } from '~/types';
 import { cn } from '~/lib/utils';
+import { Icon } from '~/components/ui/icon';
 
 interface ImportResultProps {
   summary: ImportSummary;
@@ -7,13 +8,6 @@ interface ImportResultProps {
   className?: string;
 }
 
-/**
- * What actually happened during an import.
- *
- * Silent drops were the worst failure mode of the old pipeline: a statement
- * where a third of the rows failed looked exactly like a clean one. Both the
- * parse rate and the statement's own balance check are shown here.
- */
 export function ImportResult({ summary, suggestions, className }: ImportResultProps) {
   const { reconcile } = summary;
   const skipped = Math.max(0, summary.rowsSeen - summary.rowsParsed);
@@ -24,44 +18,69 @@ export function ImportResult({ summary, suggestions, className }: ImportResultPr
   return (
     <div
       className={cn(
-        'tui-box space-y-2 p-3 text-xs',
+        'border p-5 text-sm',
         tone === 'success' && 'border-success/30 bg-success-muted',
         tone === 'warning' && 'border-warning/40 bg-warning-muted',
+        tone === 'muted' && 'border-border bg-muted/50',
         className
       )}
       role="status"
     >
-      <p className={cn('font-medium', tone === 'warning' ? 'text-warning' : 'text-foreground')}>
-        {summary.inserted > 0
-          ? `added ${summary.inserted} transaction${summary.inserted === 1 ? '' : 's'}`
-          : 'nothing new — this statement was already imported'}
-      </p>
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center border',
+            tone === 'success' && 'bg-success text-white',
+            tone === 'warning' && 'bg-warning text-black',
+            tone === 'muted' && 'bg-muted text-muted-foreground'
+          )}
+        >
+          {tone === 'success' ? (
+            <Icon name="check" className="h-4 w-4" />
+          ) : (
+            <span aria-hidden="true" className="font-mono font-bold">
+              {tone === 'warning' ? '!' : '='}
+            </span>
+          )}
+        </span>
+        <div>
+          <p className={cn('font-semibold', tone === 'warning' && 'text-warning')}>
+            {summary.inserted > 0
+              ? `${summary.inserted} transaction${summary.inserted === 1 ? '' : 's'} imported`
+              : 'statement already imported'}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {reconcile.ok === false
+              ? 'Review the balance warning before you use these totals.'
+              : 'Your dashboard is ready with the latest statement data.'}
+          </p>
+        </div>
+      </div>
 
-      <dl className="space-y-1 text-muted-foreground">
-        <Row label="rows read" value={String(summary.rowsSeen)} />
+      <dl className="mt-4 space-y-2 border-t border-current/10 pt-4 text-xs text-muted-foreground">
+        <Row label="Rows Read" value={String(summary.rowsSeen)} />
         <Row
-          label="parsed"
+          label="Rows Parsed"
           value={skipped > 0 ? `${summary.rowsParsed} (${skipped} skipped)` : String(summary.rowsParsed)}
         />
         {summary.duplicates > 0 && (
-          <Row label="already had" value={String(summary.duplicates)} />
+          <Row label="Duplicates" value={String(summary.duplicates)} />
         )}
-        <Row label="balance check" value={reconcileLabel(reconcile.ok, reconcile.checked, reconcile.breaks.length)} />
+        <Row label="Balance Check" value={reconcileLabel(reconcile.ok, reconcile.checked, reconcile.breaks.length)} />
       </dl>
 
       {suggestions && suggestions.rules > 0 && (
-        <p className="text-muted-foreground">
-          ai suggested {suggestions.rules} categor
-          {suggestions.rules === 1 ? 'y rule' : 'y rules'} covering{' '}
-          {suggestions.rows} transaction{suggestions.rows === 1 ? '' : 's'} — review
-          in settings
+        <p className="mt-4 text-xs leading-5 text-muted-foreground">
+          AI suggested {suggestions.rules} categor
+          {suggestions.rules === 1 ? 'y rule' : 'y rules'} for {suggestions.rows} transaction
+          {suggestions.rows === 1 ? '' : 's'}. Review them in Settings.
         </p>
       )}
 
       {reconcile.ok === false && (
-        <p className="text-warning/90">
-          the running balance stops adding up at {reconcile.breaks.length} point
-          {reconcile.breaks.length === 1 ? '' : 's'}, so some rows may be missing or misread.
+        <p className="mt-4 text-xs leading-5 text-warning">
+          The running balance fails at {reconcile.breaks.length} point
+          {reconcile.breaks.length === 1 ? '' : 's'}. Some rows can be missing or incorrect.
         </p>
       )}
     </div>
@@ -69,8 +88,8 @@ export function ImportResult({ summary, suggestions, className }: ImportResultPr
 }
 
 function reconcileLabel(ok: boolean | null, checked: number, breaks: number): string {
-  if (ok === null) return 'no balance column to check';
-  if (ok) return `clean (${checked} checked)`;
+  if (ok === null) return 'No balance column';
+  if (ok) return `Passed (${checked} checked)`;
   return `${breaks} mismatch${breaks === 1 ? '' : 'es'}`;
 }
 

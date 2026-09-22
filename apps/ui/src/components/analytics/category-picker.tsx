@@ -6,22 +6,15 @@ import { createRule, setTransactionCategory } from '~/lib/db';
 
 interface CategoryPickerProps {
   transactionId: string;
-  categoryId: string | null;
-  source: CategorySource | null;
 }
 
 const SOURCE_LABEL: Record<CategorySource, string> = {
-  parser: 'from the statement',
-  rule: 'matched a rule',
-  user: 'set by you',
+  parser: 'From the statement',
+  rule: 'Matched a rule',
+  user: 'Set by you',
 };
 
-/**
- * Recategorising is only useful if it sticks. Alongside updating this row,
- * the user can turn the correction into a rule so the next import gets it
- * right without being told twice.
- */
-export function CategoryPicker({ transactionId, categoryId, source }: CategoryPickerProps) {
+export function CategoryPicker({ transactionId }: CategoryPickerProps) {
   const db = usePGlite();
   const [busy, setBusy] = useState(false);
 
@@ -30,14 +23,22 @@ export function CategoryPicker({ transactionId, categoryId, source }: CategoryPi
   );
   const categories = categoriesResult?.rows ?? [];
 
-  const descriptionResult = useLiveQuery<{ description: string; counterparty_name: string | null }>(
-    `SELECT t.description, cp.canonical_name AS counterparty_name
+  const transactionResult = useLiveQuery<{
+    description: string;
+    counterparty_name: string | null;
+    category_id: string | null;
+    category_source: string | null;
+  }>(
+    `SELECT t.description, t.category_id, t.category_source,
+            cp.canonical_name AS counterparty_name
      FROM transactions t
      LEFT JOIN counterparties cp ON cp.id = t.counterparty_id
      WHERE t.id = $1`,
     [transactionId]
   );
-  const row = descriptionResult?.rows?.[0];
+  const row = transactionResult?.rows?.[0];
+  const categoryId = row?.category_id ?? null;
+  const source = (row?.category_source as CategorySource | null | undefined) ?? null;
 
   const handleChange = async (nextId: string) => {
     setBusy(true);
@@ -78,9 +79,10 @@ export function CategoryPicker({ transactionId, categoryId, source }: CategoryPi
         value={categoryId ?? ''}
         disabled={busy}
         onChange={(e) => handleChange(e.target.value)}
-        className="w-full border border-border bg-background px-2 py-1.5 text-xs focus:border-accent focus:outline-none disabled:opacity-50"
+        name={`category-${transactionId}`}
+        className="tui-input w-full text-xs disabled:opacity-50"
       >
-        <option value="">uncategorized</option>
+        <option value="">Uncategorized</option>
         {categories.map((category) => (
           <option key={category.id} value={category.id}>
             {category.name}
@@ -90,7 +92,7 @@ export function CategoryPicker({ transactionId, categoryId, source }: CategoryPi
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-muted-foreground/70">
-          {source ? SOURCE_LABEL[source] : 'not categorized yet'}
+          {source ? SOURCE_LABEL[source] : 'Not categorized yet'}
         </span>
         {categoryId && source === 'user' && (
           <button
@@ -99,7 +101,7 @@ export function CategoryPicker({ transactionId, categoryId, source }: CategoryPi
             disabled={busy}
             className="text-[11px] text-accent underline underline-offset-2 hover:no-underline disabled:opacity-50"
           >
-            always use this
+            Always Use This
           </button>
         )}
       </div>

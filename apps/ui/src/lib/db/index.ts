@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { live } from '@electric-sql/pglite/live';
+import { live, type PGliteWithLive } from '@electric-sql/pglite/live';
 import type {
   Account,
   BankType,
@@ -17,46 +17,54 @@ import { hashParts } from '~/lib/utils/hash';
 import { SCHEMA, SEED_RULES, SYSTEM_CATEGORIES, TRIGRAM_INDEX } from './schema';
 import { assertReadOnlySelect, MAX_MODEL_ROWS } from './readonly-sql';
 
-export type DbInstance = Awaited<ReturnType<typeof createDb>>;
+export type DbInstance = PGliteWithLive;
 
 /** Query-only surface, so callers that just read are easy to fake in tests. */
 export interface Queryable {
   query: DbInstance['query'];
 }
 
-async function createDb() {
-  return PGlite.create({
-    dataDir: 'idb://wakaru-ledger',
-    relaxedDurability: true,
-    extensions: { live },
-  });
-}
-
 let dbInstance: DbInstance | null = null;
+let dbPromise: Promise<DbInstance> | null = null;
 
-export async function initDb(): Promise<DbInstance> {
-  if (dbInstance) return dbInstance;
+export function initDb(): Promise<DbInstance> {
+  if (dbInstance) return Promise.resolve(dbInstance);
 
-  const db = await createDb();
-  await db.exec(SCHEMA);
+  if (!dbPromise) {
+    dbPromise = PGlite.create({
+      dataDir: 'idb://wakaru-ledger',
+      relaxedDurability: true,
+      extensions: { live },
+    })
+      .then(async (db) => {
+        await db.exec(SCHEMA);
 
-  // The rules table predates the `source` column; CREATE TABLE IF NOT EXISTS
-  // will not add it to an existing database, so migrate in place.
-  await db.query(`ALTER TABLE rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user'`);
+        await db.query(
+          `ALTER TABLE rules ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user'`
+        );
+        await db.query(
+          `ALTER TABLE rules
+             ADD COLUMN IF NOT EXISTS suggestion_confidence DOUBLE PRECISION,
+             ADD COLUMN IF NOT EXISTS suggestion_model TEXT`
+        );
 
-  // Substring search wants a trigram index. pg_trgm is a contrib module and
-  // is not in every PGlite build; without it the search still works, just
-  // with a sequential scan.
-  try {
-    await db.exec(TRIGRAM_INDEX);
-  } catch {
-    // no trigram index available
+        try {
+          await db.exec(TRIGRAM_INDEX);
+        } catch {
+          // PGlite builds without pg_trgm use sequential substring search.
+        }
+
+        await seedReferenceData(db);
+        dbInstance = db;
+        return db;
+      })
+      .catch((error: unknown) => {
+        dbPromise = null;
+        throw error;
+      });
   }
 
-  await seedReferenceData(db);
-
-  dbInstance = db;
-  return db;
+  return dbPromise;
 }
 
 export function getDb(): DbInstance {
@@ -86,10 +94,6 @@ export async function seedReferenceData(db: Queryable): Promise<void> {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Accounts
-// ---------------------------------------------------------------------------
 
 interface AccountRow {
   id: string;
@@ -137,10 +141,6 @@ export async function findOrCreateAccount(
   const result = await db.query<AccountRow>('SELECT * FROM accounts WHERE id = $1', [id]);
   return mapAccount(result.rows[0]);
 }
-
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
 
 interface ImportRow {
   id: string;
@@ -254,10 +254,6 @@ export async function accountCurrenciesForBank(db: Queryable, bank: string): Pro
   return result.rows.map((r) => r.currency);
 }
 
-// ---------------------------------------------------------------------------
-// Counterparties
-// ---------------------------------------------------------------------------
-
 /**
  * Collapse the spelling variants banks emit for the same person: case,
  * punctuation, honorifics, and word order all move around between statements.
@@ -326,10 +322,6 @@ export async function markSelfCounterparties(db: Queryable): Promise<void> {
       )
   `);
 }
-
-// ---------------------------------------------------------------------------
-// Transactions
-// ---------------------------------------------------------------------------
 
 export interface LedgerInsert {
   id: string;
@@ -417,10 +409,6 @@ export async function clearAllData(db: Queryable): Promise<void> {
   await db.query('DELETE FROM counterparties');
 }
 
-// ---------------------------------------------------------------------------
-// Categories and rules
-// ---------------------------------------------------------------------------
-
 interface RuleRow {
   id: string;
   match_field: string;
@@ -429,6 +417,8 @@ interface RuleRow {
   category_id: string;
   priority: number;
   source: string;
+  suggestion_confidence: number | null;
+  suggestion_model: string | null;
 }
 
 export async function listRules(db: Queryable): Promise<Rule[]> {
@@ -441,6 +431,8 @@ export async function listRules(db: Queryable): Promise<Rule[]> {
     categoryId: row.category_id,
     priority: Number(row.priority),
     source: row.source as RuleSource | undefined,
+    suggestionConfidence: row.suggestion_confidence,
+    suggestionModel: row.suggestion_model,
   }));
 }
 
@@ -479,10 +471,6 @@ export async function setTransactionCategory(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Settings
-// ---------------------------------------------------------------------------
-
 export async function getSetting<T>(db: Queryable, key: string): Promise<T | undefined> {
   const result = await db.query<{ value: T }>('SELECT value FROM settings WHERE key = $1', [key]);
   return result.rows[0]?.value;
@@ -495,10 +483,6 @@ export async function setSetting<T>(db: Queryable, key: string, value: T): Promi
     [key, JSON.stringify(value)]
   );
 }
-
-// ---------------------------------------------------------------------------
-// Model-authored queries
-// ---------------------------------------------------------------------------
 
 export interface QueryOutput {
   columns: string[];

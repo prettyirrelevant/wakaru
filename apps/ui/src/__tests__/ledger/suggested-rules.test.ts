@@ -86,8 +86,6 @@ describe('suggested rules', () => {
       }),
     ]);
 
-    // insertTransactions does not write transfer_group_id; the transfer
-    // linker sets it after the fact, so do the same here.
     await db.query(`UPDATE transactions SET transfer_group_id = 'grp-1' WHERE id = 'tx-internal'`);
 
     expect(await collectUncategorizedCounterparties(db)).toEqual([]);
@@ -95,7 +93,12 @@ describe('suggested rules', () => {
 
   it('persists assignments as suggested rules, deterministically', async () => {
     const assignments = [
-      { name: 'ADEBAYO JOHN', categoryId: 'cat-transfer-out' },
+      {
+        name: 'ADEBAYO JOHN',
+        categoryId: 'cat-transfer-out',
+        confidence: 0.94,
+        model: 'jev-1.13.0',
+      },
       { name: 'NO SUCH CATEGORY', categoryId: 'cat-does-not-exist' },
     ];
 
@@ -109,9 +112,10 @@ describe('suggested rules', () => {
       pattern: 'adebayo john',
       categoryId: 'cat-transfer-out',
       source: 'suggested',
+      suggestionConfidence: 0.94,
+      suggestionModel: 'jev-1.13.0',
     });
 
-    // A repeat pass is a no-op, not a duplicate.
     expect(await persistSuggestedRules(db, assignments)).toBe(0);
     expect(await listSuggested(db)).toHaveLength(1);
   });
@@ -170,7 +174,6 @@ describe('suggested rules', () => {
     expect(byDescription['SHOPRITE PURCHASE'].category_source).toBe('rule');
     expect(byDescription['PEPPER ROOM PURCHASE'].category_id).toBeNull();
 
-    // The user's own choice survives untouched.
     expect(byDescription['JUMIA PURCHASE'].category_id).toBe('cat-transfer-out');
     expect(byDescription['JUMIA PURCHASE'].category_source).toBe('user');
   });
@@ -226,7 +229,7 @@ describe('suggested rules', () => {
 });
 
 async function listSuggested(db: Queryable): Promise<Rule[]> {
-  const result = await db.query<{ id: string; pattern: string; source: string; category_id: string; match_field: string; match_type: string; priority: number }>(
+  const result = await db.query<{ id: string; pattern: string; source: string; category_id: string; match_field: string; match_type: string; priority: number; suggestion_confidence: number | null; suggestion_model: string | null }>(
     `SELECT * FROM rules WHERE source = 'suggested'`
   );
   return result.rows.map((r) => ({
@@ -237,6 +240,8 @@ async function listSuggested(db: Queryable): Promise<Rule[]> {
     categoryId: r.category_id,
     priority: r.priority,
     source: r.source as Rule['source'],
+    suggestionConfidence: r.suggestion_confidence,
+    suggestionModel: r.suggestion_model,
   }));
 }
 

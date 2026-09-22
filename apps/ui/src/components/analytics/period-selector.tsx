@@ -9,22 +9,24 @@ interface PeriodSelectorProps {
 }
 
 export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
+  const periods = value === 'custom' ? [...ORDER, 'custom' as const] : ORDER;
+
   return (
     <div
       role="group"
       aria-label="Time period"
-      className="scrollbar-hide -mx-1 flex gap-1 overflow-x-auto px-1"
+      className="scrollbar-hide flex max-w-full gap-1 overflow-x-auto border border-border bg-muted/50 p-1"
     >
-      {ORDER.map((period) => (
+      {periods.map((period) => (
         <button
           key={period}
           onClick={() => onChange(period)}
           aria-pressed={value === period}
           className={cn(
-            'shrink-0 border px-2.5 py-1 text-xs transition-colors',
+            'shrink-0 touch-manipulation px-2.5 py-1.5 text-xs font-semibold transition-[background-color,color,transform] duration-150 active:scale-[0.97]',
             value === period
-              ? 'border-accent bg-accent text-accent-foreground'
-              : 'border-border hover:border-border-strong'
+              ? 'bg-surface text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {PERIOD_LABELS[period]}

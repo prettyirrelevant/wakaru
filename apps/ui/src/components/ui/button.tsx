@@ -18,22 +18,23 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center whitespace-nowrap rounded-lg font-medium transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          'inline-flex touch-manipulation items-center justify-center gap-2 whitespace-nowrap font-semibold',
+          'transition-[background-color,border-color,color,transform,box-shadow] duration-150 ease-out active:scale-[0.98]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'disabled:pointer-events-none disabled:opacity-50',
           {
-            'bg-foreground text-background hover:bg-foreground/90':
+            'bg-accent text-accent-foreground shadow-sm hover:bg-accent/90 hover:shadow-md':
               variant === 'default',
-            'bg-muted text-foreground hover:bg-muted/80': variant === 'secondary',
-            'hover:bg-muted': variant === 'ghost',
+            'border border-border bg-surface text-foreground hover:border-border-strong hover:bg-muted/70': variant === 'secondary',
+            'text-muted-foreground hover:bg-muted hover:text-foreground': variant === 'ghost',
             'bg-destructive text-white hover:bg-destructive/90':
               variant === 'destructive',
           },
           {
-            'h-10 px-4 py-2 text-sm': size === 'default',
+            'h-10 px-4 text-sm': size === 'default',
             'h-8 px-3 text-xs': size === 'sm',
-            'h-12 px-6 text-base': size === 'lg',
-            'h-10 w-10': size === 'icon',
+            'h-12 px-6 text-sm': size === 'lg',
+            'h-10 w-10 p-0': size === 'icon',
           },
           className
         )}

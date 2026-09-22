@@ -18,10 +18,9 @@ export function CategoryBreakdown({ data, currency, onSelect }: CategoryBreakdow
   const restShare = rest.reduce((sum, row) => sum + row.share, 0);
 
   return (
-    <section className="tui-box p-4" aria-labelledby="category-breakdown-heading">
+    <section className="tui-box p-5" aria-labelledby="category-breakdown-heading">
       <div className="mb-3 flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">$</span>
-        <h2 id="category-breakdown-heading" className="text-sm font-medium">
+        <h2 id="category-breakdown-heading" className="text-sm font-semibold">
           where it went
         </h2>
       </div>
@@ -36,7 +35,7 @@ export function CategoryBreakdown({ data, currency, onSelect }: CategoryBreakdow
               className="group w-full text-left disabled:cursor-default"
             >
               <div className="flex items-baseline justify-between gap-3 text-xs">
-                <span className="truncate group-hover:text-accent">{row.categoryName}</span>
+                <span className="truncate font-medium group-hover:text-accent">{row.categoryName}</span>
                 <span className="mono-nums shrink-0 text-muted-foreground">
                   {formatCompactCurrency(row.amountMinor, currency)}
                   <span className="ml-1.5 text-muted-foreground/60">
@@ -56,7 +55,7 @@ export function CategoryBreakdown({ data, currency, onSelect }: CategoryBreakdow
 
         {rest.length > 0 && (
           <li className="flex items-baseline justify-between gap-3 pt-1 text-xs text-muted-foreground">
-            <span>{rest.length} more</span>
+            <span>+{rest.length} more</span>
             <span className="mono-nums">
               {formatCompactCurrency(restTotal, currency)}
               <span className="ml-1.5 text-muted-foreground/60">

@@ -5,7 +5,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
   type TooltipProps,
 } from 'recharts';
 import type { BalancePoint, CurrencyCode } from '~/types';
@@ -17,7 +16,7 @@ interface BalanceChartProps {
 }
 
 export function BalanceChart({ data, currency }: BalanceChartProps) {
-  if (data.length < 2) return null;
+  if (data.length < 2 || !data.some((point) => point.balanceMinor !== 0)) return null;
 
   const chartData = data.map((point) => ({
     label: formatDayLabel(point.at),
@@ -25,10 +24,10 @@ export function BalanceChart({ data, currency }: BalanceChartProps) {
   }));
 
   return (
-    <section className="tui-box p-4" aria-labelledby="balance-heading">
+    <section className="tui-box h-full p-5" aria-labelledby="balance-heading">
+      <p className="sr-only">Combined account balance across the selected period.</p>
       <div className="mb-4 flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">$</span>
-        <h2 id="balance-heading" className="text-sm font-medium">
+        <h2 id="balance-heading" className="text-sm font-semibold">
           balance
         </h2>
         <span className="ml-auto mono-nums text-xs text-muted-foreground">
@@ -45,7 +44,6 @@ export function BalanceChart({ data, currency }: BalanceChartProps) {
                 <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis
               dataKey="label"
               tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}

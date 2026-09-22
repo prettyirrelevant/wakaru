@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '~/stores/settings';
-import { TuiLoadingDots } from '~/components/ui';
+import { Button } from '~/components/ui/button';
 
 export function LocalServerConfig() {
   const chatMode = useSettingsStore((s) => s.chatMode);
@@ -25,21 +25,26 @@ export function LocalServerConfig() {
 
   const handleTest = () => {
     setLocalServerUrl(inputUrl);
-    setTimeout(() => testLocalConnection(), 0);
+    void testLocalConnection();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && inputUrl.trim()) {
-      handleTest();
-    }
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || !inputUrl.trim()) return;
+    event.preventDefault();
+    handleTest();
   };
 
   return (
     <div className="space-y-3 pt-1">
       <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">server</label>
+        <label htmlFor="local-server-url" className="text-xs font-medium text-muted-foreground">Server URL</label>
         <input
-          type="text"
+          id="local-server-url"
+          name="local-server-url"
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          spellCheck={false}
           value={inputUrl}
           onChange={(e) => setInputUrl(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -51,25 +56,24 @@ export function LocalServerConfig() {
 
       {status === 'idle' && (
         <>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleTest}
             disabled={!inputUrl.trim()}
-            className="w-full text-xs px-3 py-2 border bg-muted border-border hover:border-border-strong transition-colors disabled:opacity-50"
+            className="w-full"
           >
-            [ test connection ]
-          </button>
-          <p className="text-xs text-muted-foreground/50">
-            any openai-compatible api
+            Test Connection
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Use any OpenAI-compatible local server.
           </p>
         </>
       )}
 
       {status === 'testing' && (
-        <div className="tui-box p-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">testing connection</span>
-            <TuiLoadingDots />
-          </div>
+        <div className="tui-box p-3" role="status">
+          <p className="cursor-blink text-xs text-muted-foreground">testing connection </p>
         </div>
       )}
 
@@ -78,13 +82,15 @@ export function LocalServerConfig() {
           <div className="tui-box border-success/30 bg-success/5 p-3">
             <p className="text-xs text-success">
               <span className="mr-1.5">●</span>
-              connected · {models.length} model{models.length !== 1 ? 's' : ''} available
+              Connected · {models.length} model{models.length !== 1 ? 's' : ''} available
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">model</label>
+            <label htmlFor="local-model" className="text-xs font-medium text-muted-foreground">Model</label>
             <select
+              id="local-model"
+              name="local-model"
               value={model}
               onChange={(e) => setLocalServerModel(e.target.value)}
               className="w-full tui-input text-xs bg-muted"
@@ -97,12 +103,14 @@ export function LocalServerConfig() {
             </select>
           </div>
 
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={disconnectLocalServer}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="px-0"
           >
-            [ forget server ]
-          </button>
+            Forget Server
+          </Button>
         </>
       )}
 
@@ -114,13 +122,15 @@ export function LocalServerConfig() {
               {error}
             </p>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleTest}
             disabled={!inputUrl.trim()}
-            className="w-full text-xs px-3 py-2 border bg-muted border-border hover:border-border-strong disabled:opacity-50"
+            className="w-full"
           >
-            [ retry ]
-          </button>
+            Retry Connection
+          </Button>
         </>
       )}
     </div>

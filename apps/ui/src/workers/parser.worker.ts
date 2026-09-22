@@ -77,7 +77,7 @@ const parserApi = {
     }
 
     try {
-      onProgress(5, 'Reading file...');
+      onProgress(5, 'Reading file…');
 
       let rows = await extractRows(fileBuffer, fileName, bankType, password);
 
@@ -85,7 +85,7 @@ const parserApi = {
         rows = PalmPayParser.preprocessRows(rows);
       }
 
-      onProgress(20, `Found ${rows.length} rows...`);
+      onProgress(20, `Found ${rows.length} rows…`);
 
       const parser = parsers[bankType];
       const transactions: ParsedTransaction[] = [];
@@ -110,7 +110,7 @@ const parserApi = {
         }
 
         const progress = Math.min(90, 20 + Math.round(((i + chunk.length) / totalRows) * 70));
-        onProgress(progress, `Processing ${Math.min(i + CHUNK_SIZE, totalRows)} of ${totalRows} rows...`);
+        onProgress(progress, `Processing ${Math.min(i + CHUNK_SIZE, totalRows)} of ${totalRows} rows…`);
       }
 
       if (transactions.length === 0) {
@@ -123,7 +123,7 @@ const parserApi = {
         };
       }
 
-      onProgress(95, 'Finalizing...');
+      onProgress(95, 'Finalizing…');
 
       // Deliberately unsorted: the ingest layer needs the order the bank
       // wrote the rows in to assign sequence numbers and to walk the running

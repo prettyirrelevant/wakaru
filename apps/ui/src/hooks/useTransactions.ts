@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useLiveQuery } from '@electric-sql/pglite-react';
 import type { BankType, CategorySource, CurrencyCode, LedgerTransaction, TransactionType } from '~/types';
 import { type FilterState, emptyFilterState } from '~/lib/filters';
@@ -9,7 +9,7 @@ export type SortOrder = 'asc' | 'desc';
 
 export const PAGE_SIZE = 25;
 
-export interface TransactionRow {
+interface TransactionRow {
   id: string;
   account_id: string;
   import_id: string;
@@ -35,7 +35,7 @@ export interface TransactionRow {
   account_name: string;
 }
 
-export function mapRowToTransaction(row: TransactionRow): LedgerTransaction {
+function mapRowToTransaction(row: TransactionRow): LedgerTransaction {
   return {
     id: row.id,
     accountId: row.account_id,
@@ -79,23 +79,24 @@ export function useTransactions() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [filters, setFilters] = useState<FilterState>(emptyFilterState);
   const [page, setPage] = useState(1);
 
   const pageQuery = useMemo(
     () =>
-      transactionPageQuery(filters, searchQuery, {
+      transactionPageQuery(filters, deferredSearchQuery, {
         sortField,
         sortOrder,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       }),
-    [filters, searchQuery, sortField, sortOrder, page]
+    [filters, deferredSearchQuery, sortField, sortOrder, page]
   );
 
   const countQuery = useMemo(
-    () => transactionCountQuery(filters, searchQuery),
-    [filters, searchQuery]
+    () => transactionCountQuery(filters, deferredSearchQuery),
+    [filters, deferredSearchQuery]
   );
 
   const pageResult = useLiveQuery<TransactionRow>(pageQuery.sql, pageQuery.params);
@@ -119,18 +120,11 @@ export function useTransactions() {
     setPage(1);
   }, []);
 
-  const toggleSort = useCallback(
-    (field: SortField) => {
-      if (field === sortField) {
-        setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
-      } else {
-        setSortField(field);
-        setSortOrder('desc');
-      }
-      setPage(1);
-    },
-    [sortField]
-  );
+  const applySort = useCallback((field: SortField, order: SortOrder) => {
+    setSortField(field);
+    setSortOrder(order);
+    setPage(1);
+  }, []);
 
   const clearFilters = useCallback(() => {
     setFilters(emptyFilterState);
@@ -146,11 +140,13 @@ export function useTransactions() {
     sortField,
     sortOrder,
     searchQuery,
+    dataSearchQuery: deferredSearchQuery,
+    isSearchPending: searchQuery !== deferredSearchQuery,
     setSearchQuery: applySearch,
     filters,
     setFilters: applyFilters,
     clearFilters,
-    toggleSort,
+    setSort: applySort,
     isLoading: pageResult === undefined,
   };
 }

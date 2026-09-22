@@ -27,18 +27,10 @@ interface ParserApi {
 }
 
 export interface UseStatementUploadOptions {
-  /** Called once a statement has been ingested. */
   onComplete?: (summary: ImportSummary) => void;
-  /** Keep the worker torn down until the surface is actually visible. */
   enabled?: boolean;
 }
 
-/**
- * Everything the upload flow needs, in one place.
- *
- * The full-page view and the in-dashboard sheet previously kept two copies of
- * this logic, including two copies of the password-error handling.
- */
 export function useStatementUpload({ onComplete, enabled = true }: UseStatementUploadOptions = {}) {
   const db = usePGlite();
 
@@ -74,7 +66,6 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
     };
   }, [enabled]);
 
-  // Choosing a different bank invalidates any half-finished unlock.
   useEffect(() => {
     setPendingFile(null);
     setPassword('');
@@ -99,8 +90,7 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
 
   const currencyWarning =
     knownCurrencies.length > 0 && !knownCurrencies.includes(currency)
-      ? `you already have a ${knownCurrencies.join('/')} account at this bank — ` +
-        `importing as ${currency} creates a separate one`
+      ? `This bank already has a ${knownCurrencies.join('/')} account. Importing as ${currency} creates another account.`
       : null;
 
   const reset = useCallback(() => {
@@ -118,7 +108,7 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
       if (!selectedBank || !api) return;
 
       setPasswordError(null);
-      setStatus({ stage: 'parsing', progress: 0, message: 'reading file...' });
+      setStatus({ stage: 'parsing', progress: 0, message: 'Reading file…' });
 
       try {
         const buffer = await file.arrayBuffer();
@@ -130,14 +120,14 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
           selectedBank,
           filePassword,
           Comlink.proxy((progress: number, message: string) => {
-            setStatus({ stage: 'parsing', progress, message: message.toLowerCase() });
+            setStatus({ stage: 'parsing', progress, message });
           })
         );
 
         if (parsed.errorCode === 'password_required' || parsed.errorCode === 'password_incorrect') {
           setPendingFile(file);
           setPasswordError(
-            parsed.errorCode === 'password_incorrect' ? 'incorrect password, please try again' : null
+            parsed.errorCode === 'password_incorrect' ? 'The password is incorrect. Try again.' : null
           );
           setStatus({ stage: 'idle' });
           return;
@@ -149,7 +139,7 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
           return;
         }
 
-        setStatus({ stage: 'parsing', progress: 95, message: 'building ledger...' });
+        setStatus({ stage: 'parsing', progress: 95, message: 'Building your ledger…' });
 
         const summary = await ingestParsedStatement(db, {
           parsed,
@@ -164,9 +154,6 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
         setPassword('');
         setStatus({ stage: 'complete', summary });
 
-        // The suggestion pass is best-effort and never blocks or fails the
-        // import. It inherits the chat-mode choice: off, or a local model,
-        // or the cloud proxy the user already opted into.
         if (summary.inserted > 0) {
           const chatMode = useSettingsStore.getState().chatMode;
           if (
@@ -179,7 +166,7 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
                 setStatus({ stage: 'complete', summary, suggestions });
               }
             } catch {
-              // suggestions failed; the import stands on its own
+              // Suggestions are optional and must never fail an import.
             }
           }
         }
@@ -189,7 +176,7 @@ export function useStatementUpload({ onComplete, enabled = true }: UseStatementU
         setPendingFile(null);
         setStatus({
           stage: 'error',
-          message: error instanceof Error ? error.message : 'failed to process file',
+          message: error instanceof Error ? error.message : 'The file could not be processed.',
         });
       }
     },

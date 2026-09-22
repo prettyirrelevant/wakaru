@@ -5,24 +5,28 @@ import {
   approveSuggestedRule,
   rejectSuggestedRule,
 } from '~/lib/ledger/suggested-rules';
+import { Button } from '~/components/ui/button';
 
 interface SuggestedRuleRow {
   id: string;
   pattern: string;
   category_name: string;
+  suggestion_confidence: number | null;
+  suggestion_model: string | null;
 }
 
-/**
- * The AI's guesses, kept until the user decides. They apply from the moment
- * they are written; this panel is where a wrong guess is caught — one at a
- * time or in bulk.
- */
+const confidenceFormat = new Intl.NumberFormat('en', {
+  style: 'percent',
+  maximumFractionDigits: 0,
+});
+
 export function SuggestedRulesPanel() {
   const db = usePGlite();
   const [busy, setBusy] = useState(false);
 
   const result = useLiveQuery<SuggestedRuleRow>(`
-    SELECT r.id, r.pattern, c.name AS category_name
+    SELECT r.id, r.pattern, c.name AS category_name,
+           r.suggestion_confidence, r.suggestion_model
     FROM rules r
     JOIN categories c ON c.id = r.category_id
     WHERE r.source = 'suggested'
@@ -44,68 +48,80 @@ export function SuggestedRulesPanel() {
   return (
     <>
       <div className="tui-divider my-4" />
-      <section className="space-y-2">
+      <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">
-          ai suggested categories for {rules.length} merchant
+        <div>
+          <h3 className="text-sm font-semibold">Suggested Categories</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+          AI found matches for {rules.length} merchant
           {rules.length === 1 ? '' : 's'}
+          </p>
         </div>
-        <div className="flex gap-1">
-          <button
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={() => runForAll(approveSuggestedRule)}
             disabled={busy}
-            className="border border-border px-2 py-1 text-[11px] hover:border-border-strong disabled:opacity-50"
           >
-            keep all
-          </button>
-          <button
+            Keep All
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             type="button"
             onClick={() => runForAll(rejectSuggestedRule)}
             disabled={busy}
-            className="border border-border px-2 py-1 text-[11px] text-destructive hover:border-destructive/50 disabled:opacity-50"
+            className="text-destructive"
           >
-            reject all
-          </button>
+            Reject All
+          </Button>
         </div>
       </div>
 
-      <ul className="space-y-1">
+      <ul className="divide-y divide-border border border-border bg-surface px-3">
         {rules.map((rule) => (
           <li
             key={rule.id}
-            className="flex items-center justify-between gap-2 text-xs"
+            className="flex items-center justify-between gap-3 py-3 text-xs"
           >
             <span className="min-w-0 truncate">{rule.pattern}</span>
-            <span className="shrink-0 text-muted-foreground">{rule.category_name}</span>
+            <span className="shrink-0 text-right text-muted-foreground">
+              <span className="block">{rule.category_name}</span>
+              {rule.suggestion_confidence !== null && (
+                <span className="block text-[10px] text-muted-foreground/60">
+                  {confidenceFormat.format(rule.suggestion_confidence)}
+                  {rule.suggestion_model ? ` · ${rule.suggestion_model}` : ''}
+                </span>
+              )}
+            </span>
             <span className="flex shrink-0 gap-1">
               <button
                 type="button"
                 onClick={() => approveSuggestedRule(db, rule.id)}
                 disabled={busy}
-                aria-label={`keep ${rule.pattern}`}
-                className="border border-border px-1.5 py-0.5 text-[11px] text-success hover:border-success/50 disabled:opacity-50"
+                aria-label={`Keep ${rule.pattern}`}
+                className="px-1.5 py-1 text-[11px] font-semibold text-success hover:bg-success-muted disabled:opacity-50"
               >
-                keep
+                Keep
               </button>
               <button
                 type="button"
                 onClick={() => rejectSuggestedRule(db, rule.id)}
                 disabled={busy}
-                aria-label={`reject ${rule.pattern}`}
-                className="border border-border px-1.5 py-0.5 text-[11px] text-destructive hover:border-destructive/50 disabled:opacity-50"
+                aria-label={`Reject ${rule.pattern}`}
+                className="px-1.5 py-1 text-[11px] font-semibold text-destructive hover:bg-destructive-muted disabled:opacity-50"
               >
-                remove
+                Remove
               </button>
             </span>
           </li>
         ))}
       </ul>
 
-      <p className="text-[11px] text-muted-foreground/60">
-        names only are sent for categorisation — amounts, dates and balances
-        never leave your device. rejecting stops that merchant being suggested
-        again.
+      <p className="text-[11px] leading-5 text-muted-foreground">
+        Only merchant names go to the model. Amounts, dates, and balances stay on this device.
       </p>
       </section>
     </>

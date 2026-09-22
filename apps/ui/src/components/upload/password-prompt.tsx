@@ -19,31 +19,32 @@ export function PasswordPrompt({
 }: PasswordPromptProps) {
   return (
     <form
-      className="tui-box w-full max-w-sm space-y-4 p-4"
+      className="tui-box w-full space-y-5 p-5"
       onSubmit={(e) => {
         e.preventDefault();
         if (password) onUnlock();
       }}
     >
       <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">selected file</p>
-        <p className="truncate text-sm">{fileName}</p>
+        <p className="text-xs font-medium text-muted-foreground">Selected File</p>
+        <p className="truncate text-sm font-semibold">{fileName}</p>
       </div>
 
       <div className="space-y-2">
         <label htmlFor="statement-password" className="block text-xs text-muted-foreground">
-          this pdf is password protected
+          Enter the PDF Password
         </label>
         <input
           id="statement-password"
           type="password"
-          placeholder="enter password"
+          name="statement-password"
+          autoComplete="off"
+          placeholder="Enter password…"
           value={password}
           onChange={(e) => onPasswordChange(e.target.value)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'statement-password-error' : undefined}
-          className="w-full border border-border bg-background px-3 py-2 text-base focus:border-accent focus:outline-none sm:text-sm"
-          autoFocus
+          className="tui-input w-full text-base sm:text-sm"
         />
         {error && (
           <p id="statement-password-error" role="alert" className="text-xs text-destructive">
@@ -58,14 +59,14 @@ export function PasswordPrompt({
           onClick={onCancel}
           className="flex-1 border border-border px-3 py-2 text-xs hover:bg-muted"
         >
-          cancel
+          Cancel
         </button>
         <button
           type="submit"
           disabled={!password || disabled}
           className="flex-1 bg-accent px-3 py-2 text-xs text-accent-foreground disabled:opacity-50"
         >
-          unlock
+          Unlock Statement
         </button>
       </div>
     </form>

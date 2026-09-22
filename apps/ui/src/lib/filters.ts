@@ -266,19 +266,15 @@ export function formatFilterChips(
   return chips;
 }
 
-// ---------------------------------------------------------------------------
-// Periods
-// ---------------------------------------------------------------------------
-
 export type PeriodKey = 'all' | '30d' | '90d' | 'this-month' | 'this-year' | 'custom';
 
 export const PERIOD_LABELS: Record<PeriodKey, string> = {
-  all: 'all time',
-  '30d': '30 days',
-  '90d': '90 days',
-  'this-month': 'this month',
-  'this-year': 'this year',
-  custom: 'custom',
+  all: 'All Time',
+  '30d': '30 Days',
+  '90d': '90 Days',
+  'this-month': 'This Month',
+  'this-year': 'This Year',
+  custom: 'Custom',
 };
 
 function isoDate(date: Date): string {

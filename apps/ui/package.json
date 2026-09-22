@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -22,7 +23,6 @@
     "ai": "^6.0.0",
     "clsx": "^2.1.1",
     "comlink": "^4.4.2",
-    "dayjs": "^1.11.19",
     "framer-motion": "^11.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -30,6 +30,7 @@
     "recharts": "^2.15.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.6.0",
+    "tinykeys": "^4.0.0",
     "unpdf": "^1.4.0",
     "xlsx": "^0.18.5",
     "zod": "^3.24.0",

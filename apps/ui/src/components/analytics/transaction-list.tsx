@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLiveQuery } from '@electric-sql/pglite-react';
+import { useRef, useState } from 'react';
 import type { CurrencyCode, LedgerTransaction } from '~/types';
-import { formatCurrency, formatDate, formatDateTime, formatKind } from '~/lib/utils';
-import { cn } from '~/lib/utils';
-import { BottomSheet } from '~/components/ui';
-import { PAGE_SIZE, type useTransactions } from '~/hooks/useTransactions';
+import { Button } from '~/components/ui/button';
+import { Icon } from '~/components/ui/icon';
+import { PAGE_SIZE, type SortField, type SortOrder, type useTransactions } from '~/hooks/useTransactions';
 import { FilterPanel } from './filter-panel';
-import { CategoryPicker } from './category-picker';
+import { TransactionDetailSheet } from './transaction-detail-sheet';
 import { countActiveFilters, isFilterEmpty, formatFilterChips } from '~/lib/filters';
-import { childFeesQuery } from '~/lib/queries/analytics';
+import { formatCurrency, formatDate, formatDateTime } from '~/lib/utils';
+import { cn } from '~/lib/utils';
+import { useTinykeys } from '~/hooks/useTinykeys';
 
-type TransactionsApi = ReturnType<typeof useTransactions>;
+type TransactionsController = ReturnType<typeof useTransactions>;
 
 interface TransactionListProps {
-  controller: TransactionsApi;
+  controller: TransactionsController;
   currency: CurrencyCode;
   disableShortcuts?: boolean;
 }
@@ -23,10 +23,9 @@ export function TransactionList({
   currency,
   disableShortcuts = false,
 }: TransactionListProps) {
-  const [selectedTx, setSelectedTx] = useState<LedgerTransaction | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<LedgerTransaction | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
   const {
     transactions,
     total,
@@ -35,388 +34,264 @@ export function TransactionList({
     setPage,
     sortField,
     sortOrder,
+    setSort,
     searchQuery,
     setSearchQuery,
     filters,
     setFilters,
     clearFilters,
-    toggleSort,
+    isLoading,
+    isSearchPending,
   } = controller;
 
   const activeFilterCount = countActiveFilters(filters);
   const filterChips = formatFilterChips(filters);
-
-  useEffect(() => {
-    if (disableShortcuts) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = document.activeElement?.tagName;
-      const typing = tag === 'INPUT' || tag === 'TEXTAREA';
-
-      if (e.key === '/' && !typing) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
-        searchInputRef.current?.blur();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [disableShortcuts]);
-
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
+  useTinykeys(
+    {
+      '$mod+Shift+KeyF': (event) => {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      },
+      Escape: () => {
+        const input = searchInputRef.current;
+        if (input && document.activeElement === input) input.blur();
+      },
+    },
+    disableShortcuts
+  );
+
+  const updateSort = (value: string) => {
+    const [field, order] = value.split('-') as [SortField, SortOrder];
+    setSort(field, order);
+  };
+
   return (
-    <section className="space-y-3" aria-labelledby="transactions-heading">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">$</span>
-          <h2 id="transactions-heading" className="text-sm font-medium">
+    <section className="space-y-4" aria-labelledby="transactions-heading">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 id="transactions-heading" className="text-lg font-semibold tracking-[-0.025em]">
             transactions
           </h2>
-          {total > 0 && (
-            <span className="mono-nums text-xs text-muted-foreground">
-              {rangeStart}–{rangeEnd} of {total}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 text-xs">
-          <SortButton
-            label="date"
-            active={sortField === 'date'}
-            order={sortOrder}
-            onClick={() => toggleSort('date')}
-          />
-          <SortButton
-            label="amount"
-            active={sortField === 'amount'}
-            order={sortOrder}
-            onClick={() => toggleSort('amount')}
-          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isSearchPending
+              ? 'searching…'
+              : total > 0
+                ? `${rangeStart}–${rangeEnd} of ${total}`
+                : 'no transactions to show'}
+          </p>
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <span
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
-            aria-hidden="true"
-          >
-            /
-          </span>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <label className="relative block min-w-0">
+          <span className="sr-only">Search transactions</span>
+          <Icon
+            name="search"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
           <input
             ref={searchInputRef}
+            name="transaction-search"
             type="search"
-            aria-label="Search transactions"
-            placeholder="uber, spotify, rent... (press /)"
+            autoComplete="off"
+            placeholder="search merchants, descriptions, or references…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="tui-input w-full pl-7 text-base sm:text-sm"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="tui-input h-11 w-full pl-10 pr-12 text-base sm:text-sm"
           />
-        </div>
+          <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
+            mod+shift+f
+          </kbd>
+        </label>
+
         <button
-          onClick={() => setShowFilters(!showFilters)}
+          type="button"
+          onClick={() => setShowFilters((visible) => !visible)}
           aria-expanded={showFilters}
           className={cn(
-            'shrink-0 border px-3 py-2 text-xs',
+            'flex h-11 touch-manipulation items-center justify-center gap-2 border px-3 text-sm font-semibold transition-colors',
             showFilters || activeFilterCount > 0
-              ? 'border-accent bg-accent text-accent-foreground'
-              : 'border-border hover:border-border-strong'
+              ? 'border-accent/40 bg-accent/10 text-accent'
+              : 'border-border bg-surface text-foreground hover:border-border-strong'
           )}
         >
-          filter{activeFilterCount > 0 && ` (${activeFilterCount})`}
+          [filters]
+          {activeFilterCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center bg-accent px-1 font-mono text-[10px] text-accent-foreground">
+              {activeFilterCount}
+            </span>
+          )}
         </button>
+
+        <label className="relative">
+          <span className="sr-only">Sort transactions</span>
+          <select
+            name="transaction-sort"
+            aria-label="Sort transactions"
+            value={`${sortField}-${sortOrder}`}
+            onChange={(event) => updateSort(event.target.value)}
+            className="h-11 w-full border border-border bg-surface px-3 text-sm font-semibold focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 sm:w-auto"
+          >
+            <option value="date-desc">newest first</option>
+            <option value="date-asc">oldest first</option>
+            <option value="amount-desc">largest first</option>
+            <option value="amount-asc">smallest first</option>
+          </select>
+        </label>
       </div>
 
-      {showFilters && <FilterPanel filters={filters} onChange={setFilters} />}
+      {showFilters && (
+        <div className="border border-border bg-surface p-4 sm:p-5">
+          <FilterPanel filters={filters} onChange={setFilters} />
+        </div>
+      )}
 
       {!isFilterEmpty(filters) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {filterChips.map((chip, i) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {filterChips.map((chip) => (
             <button
-              key={i}
+              key={chip.label}
+              type="button"
               onClick={() => setFilters(chip.next)}
-              className="inline-flex items-center gap-1 border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] text-accent hover:bg-accent/20"
+              className="inline-flex touch-manipulation items-center gap-1.5 border border-accent/25 bg-accent/[0.07] px-2.5 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
             >
               {chip.label}
-              <span aria-hidden="true" className="text-accent/70">
-                ×
-              </span>
-              <span className="sr-only">remove filter</span>
+              <Icon name="x" className="h-3 w-3" />
+              <span className="sr-only">Remove filter</span>
             </button>
           ))}
           <button
+            type="button"
             onClick={clearFilters}
-            className="text-[11px] text-muted-foreground hover:text-foreground"
+            className="px-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
           >
             clear all
           </button>
         </div>
       )}
 
-      <div className="tui-box divide-y divide-border">
-        {transactions.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            <p className="mb-2 text-sm" aria-hidden="true">
-              ¯\_(ツ)_/¯
+      <div className="overflow-hidden border border-border bg-surface">
+        {isLoading ? (
+          <div className="px-6 py-14 text-center" role="status">
+            <p className="cursor-blink text-xs text-muted-foreground">$ loading transactions </p>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="px-6 py-14 text-center">
+            <span className="mx-auto flex h-10 w-10 items-center justify-center border border-border bg-muted text-muted-foreground">
+              <Icon name="search" className="h-4 w-4" />
+            </span>
+            <p className="mt-4 text-sm font-semibold">
+              {searchQuery || !isFilterEmpty(filters) ? 'no matching transactions' : 'no transactions yet'}
             </p>
-            <p className="text-xs">
+            <p className="mt-1 text-xs text-muted-foreground">
               {searchQuery || !isFilterEmpty(filters)
-                ? 'nothing matches those filters'
-                : 'no transactions yet'}
+                ? 'change the search or remove a filter.'
+                : 'import a statement to build your ledger.'}
             </p>
           </div>
         ) : (
-          transactions.map((transaction) => (
-            <TransactionRow
-              key={transaction.id}
-              transaction={transaction}
-              currency={currency}
-              onClick={() => setSelectedTx(transaction)}
-            />
-          ))
+          <ol className="divide-y divide-border">
+            {transactions.map((transaction) => (
+              <li key={transaction.id}>
+                <TransactionRow
+                  transaction={transaction}
+                  currency={currency}
+                  onClick={() => setSelectedTransaction(transaction)}
+                />
+              </li>
+            ))}
+          </ol>
         )}
       </div>
 
       {totalPages > 1 && (
-        <nav className="flex items-center justify-between text-xs" aria-label="Pagination">
-          <button
+        <nav className="flex items-center justify-between gap-3" aria-label="Transaction pages">
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
-            className="tui-btn-ghost px-2 py-1 disabled:opacity-30"
           >
-            {'<'} prev
-          </button>
-          <span className="mono-nums text-muted-foreground">
-            {page}/{totalPages}
+            <Icon name="chevron-left" className="h-4 w-4" />
+            Previous
+          </Button>
+          <span className="mono-nums text-xs text-muted-foreground">
+            page {page}/{totalPages}
           </span>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
-            className="tui-btn-ghost px-2 py-1 disabled:opacity-30"
           >
-            next {'>'}
-          </button>
+            Next
+            <Icon name="chevron-right" className="h-4 w-4" />
+          </Button>
         </nav>
       )}
 
       <TransactionDetailSheet
-        transaction={selectedTx}
+        transaction={selectedTransaction}
         currency={currency}
-        onClose={() => setSelectedTx(null)}
+        onClose={() => setSelectedTransaction(null)}
       />
     </section>
   );
 }
 
-function SortButton({
-  label,
-  active,
-  order,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  order: 'asc' | 'desc';
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'border px-2 py-1',
-        active ? 'border-accent bg-accent text-accent-foreground' : 'border-border hover:border-border-strong'
-      )}
-    >
-      {label} {active && (order === 'desc' ? '↓' : '↑')}
-    </button>
-  );
-}
-
-interface TransactionRowProps {
-  transaction: LedgerTransaction;
-  currency: CurrencyCode;
-  onClick: () => void;
-}
-
-function TransactionRow({ transaction, currency, onClick }: TransactionRowProps) {
-  const isInflow = transaction.amountMinor > 0;
-  const isInternal = transaction.transferGroupId !== null;
-
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50"
-    >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">
-          {transaction.counterpartyName || transaction.description}
-        </p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          <span title={formatDateTime(transaction.bookedAt)}>{formatDate(transaction.bookedAt)}</span>
-          <span> · {transaction.accountLabel}</span>
-          {transaction.categoryName && <span> · {transaction.categoryName}</span>}
-          {isInternal && <span className="text-accent"> · internal</span>}
-        </p>
-      </div>
-
-      <div
-        className={cn(
-          'mono-nums shrink-0 text-right text-xs font-medium',
-          isInternal ? 'text-muted-foreground' : isInflow ? 'text-success' : 'text-destructive'
-        )}
-      >
-        {isInflow ? '+' : '-'}
-        {formatCurrency(Math.abs(transaction.amountMinor), transaction.currency ?? currency)}
-      </div>
-    </button>
-  );
-}
-
-interface TransactionDetailSheetProps {
-  transaction: LedgerTransaction | null;
-  currency: CurrencyCode;
-  onClose: () => void;
-}
-
-function TransactionDetailSheet({ transaction, currency, onClose }: TransactionDetailSheetProps) {
-  return (
-    <BottomSheet isOpen={transaction !== null} onClose={onClose} title="Transaction detail">
-      {transaction && (
-        <TransactionDetail transaction={transaction} currency={currency} onClose={onClose} />
-      )}
-    </BottomSheet>
-  );
-}
-
-function TransactionDetail({
+function TransactionRow({
   transaction,
   currency,
+  onClick,
 }: {
   transaction: LedgerTransaction;
   currency: CurrencyCode;
-  onClose: () => void;
+  onClick: () => void;
 }) {
   const isInflow = transaction.amountMinor > 0;
-  const txCurrency = transaction.currency ?? currency;
-
-  const feesQuery = childFeesQuery(transaction.id);
-  const feesResult = useLiveQuery<{
-    id: string;
-    description: string;
-    amount_minor: string;
-    kind: string;
-  }>(feesQuery.sql, feesQuery.params);
-
-  const fees = feesResult?.rows ?? [];
-  const feeTotal = fees.reduce((sum, fee) => sum + Math.abs(Number(fee.amount_minor)), 0);
+  const isInternal = transaction.transferGroupId !== null;
+  const name = transaction.counterpartyName || transaction.description;
 
   return (
-    <div className="overflow-y-auto px-4 pb-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            {isInflow ? 'received' : 'sent'}
-          </p>
-          <p
-            className={cn(
-              'mono-nums mt-1 text-2xl font-semibold',
-              isInflow ? 'text-success' : 'text-destructive'
-            )}
-          >
-            {isInflow ? '+' : '-'}
-            {formatCurrency(Math.abs(transaction.amountMinor), txCurrency)}
-          </p>
-          {feeTotal > 0 && (
-            <p className="mt-1 text-xs text-warning">
-              + {formatCurrency(feeTotal, txCurrency)} in charges
-            </p>
-          )}
-        </div>
-        <span className="tui-badge">{formatKind(transaction.kind)}</span>
-      </div>
-
-      {transaction.transferGroupId && (
-        <p className="tui-box mt-4 border-accent/30 bg-accent/10 p-3 text-xs text-accent">
-          matched as a transfer between your own accounts, so it is left out of spending totals.
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid w-full touch-manipulation grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/45 active:bg-muted/70 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:px-5"
+      aria-label={`Open ${name} transaction for ${formatCurrency(Math.abs(transaction.amountMinor), transaction.currency ?? currency)}`}
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{name}</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">
+          {transaction.accountLabel}
+          {transaction.categoryName ? ` · ${transaction.categoryName}` : ''}
+          {isInternal ? ' · Transfer' : ''}
         </p>
-      )}
-
-      <div className="tui-box mt-4 p-3">
-        <DetailRow label="date" value={formatDate(transaction.bookedAt)} />
-        {transaction.valueAt && transaction.valueAt !== transaction.bookedAt && (
-          <DetailRow label="value date" value={formatDate(transaction.valueAt)} />
-        )}
-        <DetailRow label="account" value={transaction.accountLabel ?? '—'} />
-        {transaction.balanceAfterMinor !== null && (
-          <DetailRow
-            label="balance after"
-            value={formatCurrency(transaction.balanceAfterMinor, txCurrency)}
-            mono
-          />
-        )}
       </div>
 
-      <div className="tui-box mt-3 p-3">
-        <DetailRow label="description" value={transaction.description} />
-        {transaction.narration && transaction.narration !== transaction.description && (
-          <DetailRow label="narration" value={transaction.narration} />
-        )}
+      <span
+        title={formatDateTime(transaction.bookedAt)}
+        className="hidden text-xs text-muted-foreground sm:block"
+      >
+        {formatDate(transaction.bookedAt)}
+      </span>
+
+      <div className="text-right">
+        <p
+          className={cn(
+            'mono-nums text-sm font-semibold',
+            isInternal ? 'text-muted-foreground' : isInflow ? 'text-success' : 'text-foreground'
+          )}
+        >
+          {isInflow ? '+' : '-'}
+          {formatCurrency(Math.abs(transaction.amountMinor), transaction.currency ?? currency)}
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground sm:hidden">
+          {formatDate(transaction.bookedAt)}
+        </p>
       </div>
-
-      {transaction.counterpartyName && (
-        <div className="tui-box mt-3 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-            {isInflow ? 'from' : 'to'}
-          </p>
-          <DetailRow label="name" value={transaction.counterpartyName} />
-        </div>
-      )}
-
-      <div className="tui-box mt-3 p-3">
-        <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">category</p>
-        <CategoryPicker
-          transactionId={transaction.id}
-          categoryId={transaction.categoryId}
-          source={transaction.categorySource}
-        />
-      </div>
-
-      {fees.length > 0 && (
-        <div className="tui-box mt-3 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">charges</p>
-          {fees.map((fee) => (
-            <DetailRow
-              key={fee.id}
-              label={fee.description}
-              value={formatCurrency(Math.abs(Number(fee.amount_minor)), txCurrency)}
-              mono
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="tui-box mt-3 p-3">
-        <DetailRow label="reference" value={transaction.reference} mono />
-      </div>
-    </div>
-  );
-}
-
-interface DetailRowProps {
-  label: string;
-  value: string;
-  mono?: boolean;
-}
-
-function DetailRow({ label, value, mono }: DetailRowProps) {
-  return (
-    <div className="flex items-start justify-between py-1.5 text-xs">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className={cn('ml-4 break-all text-right', mono && 'mono-nums')}>{value}</span>
-    </div>
+    </button>
   );
 }
