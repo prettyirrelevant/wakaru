@@ -52,7 +52,7 @@ pnpm dev
 
 - react + typescript
 - pglite (postgres in wasm) for in-browser storage and queries
-- cloudflare workers ai for the hosted chat proxy, or any openai-compatible local server
+- vercel ai gateway with ling for hosted chat, or any openai-compatible local server
 - tailwind with a terminal-inspired ui
 
 ## license

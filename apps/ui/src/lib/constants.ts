@@ -1,7 +1,6 @@
 import { BankType, type BankInfo } from '~/types';
 
-/** Cloud proxy that forwards chat and categorisation requests to the model. */
-export const PROXY_URL = 'https://wakaru-api.ienioladewumi.workers.dev';
+export const PROXY_URL = import.meta.env.VITE_PROXY_URL ?? '';
 
 export const SUPPORTED_BANKS: BankInfo[] = [
   { id: BankType.Kuda, name: 'Kuda', available: true, fileFormat: 'excel' },

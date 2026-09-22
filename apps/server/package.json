@@ -4,20 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "ai": "^6.0.6",
-    "hono": "^4.6.0",
-    "workers-ai-provider": "^3.3.1",
+    "@wakaru/shared": "workspace:*",
+    "ai": "^7.0.109",
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241127.0",
-    "typescript": "^5.7.2",
-    "wrangler": "^4.54.0"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
   },
   "license": "MIT",
   "author": {

@@ -20,6 +20,7 @@
     "@electric-sql/pglite": "^0.3.14",
     "@electric-sql/pglite-react": "^0.2.32",
     "@radix-ui/react-slot": "^1.1.1",
+    "@wakaru/shared": "workspace:*",
     "ai": "^6.0.0",
     "clsx": "^2.1.1",
     "comlink": "^4.4.2",

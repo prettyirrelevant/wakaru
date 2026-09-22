@@ -1,6 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm --filter @wakaru/ui build",
+  "devCommand": "pnpm --filter @wakaru/ui exec vite --port $PORT",
   "outputDirectory": "apps/ui/dist",
   "installCommand": "pnpm install",
-  "framework": "vite"
+  "framework": "vite",
+  "functions": {
+    "api/chat.ts": { "maxDuration": 60 },
+    "api/categorize.ts": { "maxDuration": 60 }
+  }
 }

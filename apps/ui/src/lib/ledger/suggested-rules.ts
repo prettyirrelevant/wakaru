@@ -19,7 +19,7 @@ import {
   type CategorizeAssignment,
   type CategorizeCandidate,
   type CategorizeRequest,
-} from '~/lib/ai/categorize-prompt';
+} from '@wakaru/shared/categorize';
 
 const REJECTED_KEY = 'rejectedSuggestions';
 const MAX_SUGGEST_NAMES = 60;

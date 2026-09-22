@@ -1,50 +1,22 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { streamText, tool, convertToModelMessages, stepCountIs } from 'ai';
-import { createWorkersAI } from 'workers-ai-provider';
+import {
+  convertToModelMessages,
+  experimental_evaluate as evaluate,
+  stepCountIs,
+  streamText,
+  tool,
+  type Experimental_EvaluationQuestion,
+} from 'ai';
 import { z } from 'zod';
-import { SYSTEM_PROMPT } from '../../ui/src/lib/chat/schema-prompt';
 import {
   MIN_CATEGORY_CONFIDENCE,
   type CategorizeAssignment,
   type CategorizeRequest,
-} from '../../ui/src/lib/ai/categorize-prompt';
+} from '@wakaru/shared/categorize';
+import { SYSTEM_PROMPT } from '@wakaru/shared/chat';
 
-type Bindings = {
-  AI: Ai;
-  CHAT_RATE_LIMITER: { limit(o: { key: string }): Promise<{ success: boolean }> };
-  CATEGORIZE_RATE_LIMITER: { limit(o: { key: string }): Promise<{ success: boolean }> };
-  AI_MODEL?: string;
-  CATEGORIZE_MODEL?: string;
-  AI_GATEWAY_ID?: string;
-  ALLOWED_ORIGINS?: string;
-};
+const CHAT_MODEL = process.env.AI_MODEL ?? 'inclusionai/ling-3.0-flash-fin';
+const CATEGORIZE_MODEL = process.env.CATEGORIZE_MODEL ?? 'typesafe-ai/jev';
 
-const DEFAULT_MODEL = '@cf/openai/gpt-oss-120b';
-const DEFAULT_CATEGORIZE_MODEL = 'typesafe/jev';
-const DEFAULT_GATEWAY_ID = 'default';
-
-const app = new Hono<{ Bindings: Bindings }>();
-
-app.use('*', (c, next) =>
-  cors({
-    origin: (origin) => {
-      if (!origin) return null;
-      if (origin === 'http://localhost:5173') return origin;
-      if (origin.endsWith('.vercel.app')) return origin;
-      if ((c.env.ALLOWED_ORIGINS ?? '').split(',').includes(origin)) return origin;
-      return null;
-    },
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type'],
-    maxAge: 86400,
-  })(c, next)
-);
-
-/**
- * Declared without an `execute`: the query runs in the browser against the
- * user's local database and the client sends back the result.
- */
 const queryDatabase = tool({
   description: "Query the user's transaction ledger to answer their question",
   inputSchema: z.object({
@@ -56,42 +28,6 @@ const queryDatabase = tool({
       ),
   }),
 });
-
-app.post('/api/chat', async (c) => {
-  // Fail closed: skipping the limiter when the header is missing left an
-  // unmetered path to the model.
-  const ip = c.req.header('cf-connecting-ip');
-  if (!ip) return c.json({ error: 'Could not identify client.' }, 400);
-
-  const { success } = await c.env.CHAT_RATE_LIMITER.limit({ key: ip });
-  if (!success) return c.json({ error: 'Rate limit exceeded. Try again shortly.' }, 429);
-
-  const body = await c.req.json<{ messages?: unknown }>().catch(() => null);
-  if (!Array.isArray(body?.messages) || body.messages.length === 0) {
-    return c.json({ error: 'messages must be a non-empty array' }, 400);
-  }
-
-  const workersai = createWorkersAI({ binding: c.env.AI });
-
-  const result = streamText({
-    model: workersai((c.env.AI_MODEL ?? DEFAULT_MODEL) as Parameters<typeof workersai>[0]),
-    system: SYSTEM_PROMPT,
-    messages: await convertToModelMessages(
-      body.messages as Parameters<typeof convertToModelMessages>[0]
-    ),
-    tools: { queryDatabase },
-    stopWhen: stepCountIs(5),
-  });
-
-  return result.toUIMessageStreamResponse();
-});
-
-app.get('/health', (c) =>
-  c.json({
-    chatModel: c.env.AI_MODEL ?? DEFAULT_MODEL,
-    categorizeModel: c.env.CATEGORIZE_MODEL ?? DEFAULT_CATEGORIZE_MODEL,
-  })
-);
 
 const categorizeBodySchema = z.object({
   names: z
@@ -109,22 +45,21 @@ const categorizeBodySchema = z.object({
     .max(30),
 });
 
-const jevResultSchema = z.object({
-  model: z.string().min(1),
-  answers: z.record(
-    z.object({
-      type: z.literal('choice'),
-      choice: z.string(),
-      confidence: z.number().min(0).max(1),
-    })
-  ),
-});
+function json(body: unknown, status = 200, headers?: HeadersInit) {
+  return Response.json(body, { status, headers });
+}
 
-type JevResult = z.infer<typeof jevResultSchema>;
+function rejectMethod(method: string, allowed: string) {
+  if (method === allowed) return null;
+  return json({ error: 'Method not allowed.' }, 405, { Allow: allowed });
+}
 
-function buildJevInput(request: CategorizeRequest) {
+function buildEvaluation(request: CategorizeRequest) {
   const counterparties = Object.fromEntries(
-    request.names.map((candidate, index) => [`candidate_${index}`, candidate])
+    request.names.map((candidate, index) => [
+      `candidate_${index}`,
+      { name: candidate.name, direction: candidate.direction },
+    ])
   );
   const criteria = Object.fromEntries([
     ...request.categories.map((category) => [category.id, category.name]),
@@ -137,78 +72,96 @@ function buildJevInput(request: CategorizeRequest) {
     request.names.map((_, index) => [
       `candidate_${index}`,
       {
-        type: 'choice',
+        type: 'choice' as const,
         instructions: [
           `Choose the best category for \`counterparties.candidate_${index}\`.`,
           'Use the direction as evidence.',
           'Treat a person as an individual transfer in the stated direction.',
           'Treat a payment app as a transfer unless the name clearly identifies a bill.',
           'Choose the most specific category. Choose skip when the evidence is ambiguous.',
-        ],
+        ].join(' '),
         criteria,
       },
     ])
-  );
+  ) as Record<string, Experimental_EvaluationQuestion>;
 
   return { state: { counterparties }, questions };
 }
 
-function mapJevAssignments(request: CategorizeRequest, result: JevResult): CategorizeAssignment[] {
+function mapAssignments(
+  request: CategorizeRequest,
+  answers: Awaited<ReturnType<typeof evaluate>>['answers'],
+  model: string
+): CategorizeAssignment[] {
   const categoryIds = new Set(request.categories.map((category) => category.id));
 
   return request.names.flatMap((candidate, index) => {
-    const answer = result.answers[`candidate_${index}`];
-    if (
-      !answer ||
-      answer.type !== 'choice' ||
-      answer.choice === 'skip' ||
-      !categoryIds.has(answer.choice) ||
-      !Number.isFinite(answer.confidence) ||
-      answer.confidence < MIN_CATEGORY_CONFIDENCE
-    ) {
-      return [];
-    }
+    const answer = answers[`candidate_${index}`];
+    if (!answer || answer.type !== 'choice' || answer.choice === 'skip') return [];
+
+    const confidence = answer.probabilities?.[answer.choice] ?? 0;
+    if (!categoryIds.has(answer.choice) || confidence < MIN_CATEGORY_CONFIDENCE) return [];
 
     return [
       {
         name: candidate.name,
         categoryId: answer.choice,
-        confidence: answer.confidence,
-        model: result.model,
+        confidence,
+        model,
       },
     ];
   });
 }
 
-app.post('/api/categorize', async (c) => {
-  const ip = c.req.header('cf-connecting-ip');
-  if (!ip) return c.json({ error: 'Could not identify client.' }, 400);
+export async function handleChat(request: Request) {
+  const methodError = rejectMethod(request.method, 'POST');
+  if (methodError) return methodError;
 
-  const { success } = await c.env.CATEGORIZE_RATE_LIMITER.limit({ key: ip });
-  if (!success) return c.json({ error: 'Rate limit exceeded. Try again shortly.' }, 429);
-
-  const body = await c.req.json().catch(() => null);
-  const parsed = categorizeBodySchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: 'Invalid body.' }, 400);
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object' || !('messages' in body) || !Array.isArray(body.messages)) {
+    return json({ error: 'messages must be a non-empty array' }, 400);
+  }
+  if (body.messages.length === 0) {
+    return json({ error: 'messages must be a non-empty array' }, 400);
   }
 
-  const request: CategorizeRequest = parsed.data;
+  const result = streamText({
+    model: CHAT_MODEL,
+    system: SYSTEM_PROMPT,
+    messages: await convertToModelMessages(body.messages),
+    tools: { queryDatabase },
+    stopWhen: stepCountIs(5),
+  });
+
+  return result.toUIMessageStreamResponse();
+}
+
+export async function handleCategorize(request: Request) {
+  const methodError = rejectMethod(request.method, 'POST');
+  if (methodError) return methodError;
+
+  const parsed = categorizeBodySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return json({ error: 'Invalid body.' }, 400);
 
   try {
-    const model = c.env.CATEGORIZE_MODEL ?? DEFAULT_CATEGORIZE_MODEL;
-    const response = await c.env.AI.run(model as never, buildJevInput(request) as never, {
-      gateway: { id: c.env.AI_GATEWAY_ID ?? DEFAULT_GATEWAY_ID },
+    const evaluation = buildEvaluation(parsed.data);
+    const result = await evaluate({
+      model: CATEGORIZE_MODEL,
+      state: evaluation.state,
+      questions: evaluation.questions,
     });
-    const result = jevResultSchema.parse(response);
-    return c.json({ assignments: mapJevAssignments(request, result) });
+    return json({
+      assignments: mapAssignments(parsed.data, result.answers, result.response.modelId),
+    });
   } catch (error) {
-    // Keep the real cause visible: quota, a transient model error, or a
-    // response that failed schema validation are all different problems.
     const message = error instanceof Error ? error.message : String(error);
     console.error('categorize failed:', message);
-    return c.json({ error: `Model could not be reached. (${message})` }, 502);
+    return json({ error: `Model could not be reached. (${message})` }, 502);
   }
-});
+}
 
-export default app;
+export function handleHealth(request: Request) {
+  const methodError = rejectMethod(request.method, 'GET');
+  if (methodError) return methodError;
+  return json({ chatModel: CHAT_MODEL, categorizeModel: CATEGORIZE_MODEL });
+}

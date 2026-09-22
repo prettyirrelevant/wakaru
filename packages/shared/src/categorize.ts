@@ -39,10 +39,8 @@ export const CATEGORIZE_SCHEMA = z.object({
 });
 
 export function buildCategorizePrompt({ names, categories }: CategorizeRequest): string {
-  const nameLines = names
-    .map((n) => `- ${n.name} (mostly money ${n.direction})`)
-    .join('\n');
-  const categoryLines = categories.map((c) => `- ${c.id}: ${c.name}`).join('\n');
+  const nameLines = names.map((name) => `- ${name.name} (mostly money ${name.direction})`).join('\n');
+  const categoryLines = categories.map((category) => `- ${category.id}: ${category.name}`).join('\n');
 
   return `You are classifying merchant and person names from a Nigerian bank statement into spending categories.
 

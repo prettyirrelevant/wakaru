@@ -11,7 +11,7 @@ import {
 } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import { SYSTEM_PROMPT } from '~/lib/chat/schema-prompt';
+import { SYSTEM_PROMPT } from '@wakaru/shared/chat';
 
 export type ToolExecutor = (sql: string) => Promise<string>;
 

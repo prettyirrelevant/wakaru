@@ -2,11 +2,15 @@
   "name": "wakaru",
   "private": true,
   "version": "0.0.1",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
   "scripts": {
     "dev": "pnpm --filter @wakaru/ui dev",
-    "dev:server": "pnpm --filter @wakaru/server dev",
+    "dev:full": "vercel dev",
     "build": "pnpm --filter @wakaru/ui build",
-    "build:server": "pnpm --filter @wakaru/server deploy",
+    "build:server": "pnpm --filter @wakaru/server typecheck",
     "lint": "pnpm --filter @wakaru/ui lint",
     "lint:fix": "pnpm --filter @wakaru/ui lint:fix",
     "typecheck": "pnpm -r typecheck",
