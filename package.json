@@ -1,6 +1,7 @@
 {
   "name": "wakaru",
   "private": true,
+  "type": "module",
   "version": "0.0.1",
   "devDependencies": {
     "@types/node": "^22.10.2",
